@@ -1288,20 +1288,21 @@ def render_whale_screener_content():
             progress_bar = st.progress(0)
             status_text = st.empty()
 
-            client = HyperliquidClient()
             results = []
+            total_wallets = len(filtered_df)
 
-            for i, (_, row) in enumerate(filtered_df.iterrows()):
-                addr = row["trader_address"]
-                status_text.text(f"Fetching {row['trader_address_label'][:30]}...")
-
+            # Helper function for parallel fetching
+            def fetch_portfolio(wallet_info):
+                """Fetch portfolio for a single wallet."""
+                addr, display_name, entity = wallet_info
+                client = HyperliquidClient()
                 try:
                     breakdown = client.get_portfolio_breakdown(addr, time_period)
                     if breakdown and breakdown.total.account_value > 0:
-                        results.append({
+                        return {
                             "address": addr,
-                            "display_name": row["trader_address_label"][:40],
-                            "entity": row["Entity"],
+                            "display_name": display_name,
+                            "entity": entity,
                             "total_value": breakdown.total.account_value,
                             "perp_value": breakdown.perp.account_value,
                             "spot_value": breakdown.spot.account_value,
@@ -1312,12 +1313,40 @@ def render_whale_screener_content():
                             "total_volume": breakdown.total.volume,
                             "perp_volume": breakdown.perp.volume,
                             "spot_volume": breakdown.spot.volume,
-                        })
+                        }
                 except Exception:
                     pass
+                return None
 
-                progress_bar.progress((i + 1) / len(filtered_df))
-                time.sleep(0.05)
+            # Prepare wallet list
+            wallet_list = [
+                (row["trader_address"], row["trader_address_label"][:40], row["Entity"])
+                for _, row in filtered_df.iterrows()
+            ]
+
+            # Use ThreadPoolExecutor with 20 workers for faster fetching
+            max_workers = min(20, total_wallets)
+            completed_count = 0
+
+            status_text.text(f"⚡ Parallel fetching with {max_workers} workers...")
+
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                future_to_wallet = {
+                    executor.submit(fetch_portfolio, wallet_info): wallet_info[1]
+                    for wallet_info in wallet_list
+                }
+
+                for future in as_completed(future_to_wallet):
+                    completed_count += 1
+                    try:
+                        result = future.result()
+                        if result:
+                            results.append(result)
+                    except Exception:
+                        pass
+
+                    progress_bar.progress(completed_count / total_wallets)
+                    status_text.text(f"⚡ Fetched {completed_count}/{total_wallets} wallets ({len(results)} with data)")
 
             progress_bar.empty()
             status_text.empty()
@@ -1530,8 +1559,8 @@ def render_whale_screener_content():
                     ]
 
                     # Use ThreadPoolExecutor for parallel fetching
-                    # Limit workers to avoid rate limiting (10 concurrent requests)
-                    max_workers = min(10, total_wallets)
+                    # Use 20 workers for faster fetching
+                    max_workers = min(20, total_wallets)
                     completed_count = 0
 
                     status_text.text(f"⚡ Parallel fetching with {max_workers} workers...")
