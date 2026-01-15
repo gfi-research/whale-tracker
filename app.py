@@ -1518,20 +1518,43 @@ def render_whale_screener_content():
                 all_wallets_df = filtered_df.copy()
                 total_wallets = len(all_wallets_df)
 
-                # Fetch from all wallets using parallel execution
-                with st.spinner(f"Fetching trades for all {total_wallets} wallets ({date_label})..."):
-                    progress_bar = st.progress(0)
-                    status_text = st.empty()
+                # Fetch from all wallets using SEQUENTIAL execution with retry
+                # This ensures complete data reliability over speed
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+                log_container = st.empty()
 
-                    all_fills = []
-                    start_time = datetime(from_date.year, from_date.month, from_date.day)
-                    end_time = datetime(to_date.year, to_date.month, to_date.day, 23, 59, 59)
+                all_fills = []
+                start_time = datetime(from_date.year, from_date.month, from_date.day)
+                end_time = datetime(to_date.year, to_date.month, to_date.day, 23, 59, 59)
 
-                    # Helper function for parallel fetching (rate limiting handled in HyperliquidClient)
-                    def fetch_wallet_fills(wallet_info):
-                        """Fetch fills for a single wallet."""
-                        wallet_address, wallet_name = wallet_info
-                        client = HyperliquidClient()
+                # Prepare wallet list
+                wallet_list = [
+                    (row["trader_address"], row["display_name"])
+                    for _, row in all_wallets_df.iterrows()
+                ]
+
+                # Track statistics for logging
+                fetch_stats = {
+                    'success': 0,
+                    'empty': 0,
+                    'failed': 0,
+                    'retried': 0,
+                    'total_trades': 0,
+                    'errors': []
+                }
+
+                client = HyperliquidClient()
+                max_retries = 3
+
+                status_text.text(f"🔄 Sequential fetching for reliability ({total_wallets} wallets)...")
+
+                for idx, (wallet_address, wallet_name) in enumerate(wallet_list):
+                    wallet_fills = []
+                    last_error = None
+
+                    # Retry loop for each wallet
+                    for attempt in range(max_retries):
                         try:
                             fills = client.get_user_fills_paginated(
                                 wallet_address,
@@ -1539,74 +1562,85 @@ def render_whale_screener_content():
                                 end_time,
                                 max_fills=10000
                             )
+
                             if fills:
-                                return [(wallet_name, f) for f in fills]
-                        except Exception:
-                            pass
-                        return []
+                                wallet_fills = fills
+                                if attempt > 0:
+                                    fetch_stats['retried'] += 1
+                                break
+                            else:
+                                # Empty response - might be rate limited or no trades
+                                if attempt < max_retries - 1:
+                                    time.sleep(0.5)  # Brief pause before retry
 
-                    # Prepare wallet list for parallel processing
-                    wallet_list = [
-                        (row["trader_address"], row["display_name"])
-                        for _, row in all_wallets_df.iterrows()
-                    ]
+                        except Exception as e:
+                            last_error = str(e)
+                            if attempt < max_retries - 1:
+                                wait_time = (attempt + 1) * 1.0  # Progressive backoff
+                                time.sleep(wait_time)
 
-                    # Use 5 workers (rate limiting handled globally in HyperliquidClient)
-                    max_workers = min(5, total_wallets)
-                    completed_count = 0
-
-                    status_text.text(f"⚡ Parallel fetching with {max_workers} workers...")
-
-                    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                        # Submit all tasks
-                        future_to_wallet = {
-                            executor.submit(fetch_wallet_fills, wallet_info): wallet_info[1]
-                            for wallet_info in wallet_list
-                        }
-
-                        # Process results as they complete
-                        for future in as_completed(future_to_wallet):
-                            wallet_name = future_to_wallet[future]
-                            completed_count += 1
-
-                            try:
-                                results = future.result()
-                                for wallet_name_result, f in results:
-                                    all_fills.append({
-                                        'wallet': wallet_name_result,
-                                        'coin': f.coin,
-                                        'side': f.side,
-                                        'direction': f.direction,
-                                        'size': f.size,
-                                        'price': f.price,
-                                        'pnl': f.pnl,
-                                        'timestamp': f.timestamp,
-                                        'fee': f.fee
-                                    })
-                            except Exception as e:
-                                pass  # Skip failed wallets
-
-                            # Update progress
-                            progress_bar.progress(completed_count / total_wallets)
-                            status_text.text(f"⚡ Fetched {completed_count}/{total_wallets} wallets ({len(all_fills)} trades found)")
-
-                    progress_bar.empty()
-                    status_text.empty()
-
-                    # Always update session state
-                    st.session_state.calendar_years = year_range
-                    st.session_state.calendar_from_date = from_date
-                    st.session_state.calendar_to_date = to_date
-                    st.session_state.activity_mode = "all"
-                    # Store all wallet names for heatmap (including those with no trades)
-                    st.session_state.all_wallet_names = all_wallets_df["display_name"].tolist()
-
-                    if all_fills:
-                        st.session_state.activity_fills = pd.DataFrame(all_fills)
-                        st.success(f"✅ Found {len(all_fills)} trades across all wallets in {date_label}")
+                    # Process results
+                    if wallet_fills:
+                        fetch_stats['success'] += 1
+                        fetch_stats['total_trades'] += len(wallet_fills)
+                        for f in wallet_fills:
+                            all_fills.append({
+                                'wallet': wallet_name,
+                                'coin': f.coin,
+                                'side': f.side,
+                                'direction': f.direction,
+                                'size': f.size,
+                                'price': f.price,
+                                'pnl': f.pnl,
+                                'timestamp': f.timestamp,
+                                'fee': f.fee
+                            })
+                    elif last_error:
+                        fetch_stats['failed'] += 1
+                        fetch_stats['errors'].append(f"{wallet_name[:20]}: {last_error[:50]}")
                     else:
-                        st.warning(f"No trades found for {date_label}")
-                        st.session_state.activity_fills = pd.DataFrame()
+                        fetch_stats['empty'] += 1
+
+                    # Update progress
+                    completed = idx + 1
+                    progress_bar.progress(completed / total_wallets)
+                    status_text.text(
+                        f"🔄 {completed}/{total_wallets} | "
+                        f"✅ {fetch_stats['success']} with data | "
+                        f"⚪ {fetch_stats['empty']} empty | "
+                        f"❌ {fetch_stats['failed']} failed | "
+                        f"📊 {fetch_stats['total_trades']} trades"
+                    )
+
+                progress_bar.empty()
+                status_text.empty()
+                log_container.empty()
+
+                # Show summary
+                if fetch_stats['failed'] > 0:
+                    with st.expander(f"⚠️ {fetch_stats['failed']} wallets failed - click to see details"):
+                        for error in fetch_stats['errors'][:10]:
+                            st.text(error)
+                        if len(fetch_stats['errors']) > 10:
+                            st.text(f"... and {len(fetch_stats['errors']) - 10} more")
+
+                if fetch_stats['retried'] > 0:
+                    st.info(f"ℹ️ {fetch_stats['retried']} wallets succeeded after retry")
+
+                # Always update session state
+                st.session_state.calendar_years = year_range
+                st.session_state.calendar_from_date = from_date
+                st.session_state.calendar_to_date = to_date
+                st.session_state.activity_mode = "all"
+                # Store all wallet names for heatmap (including those with no trades)
+                st.session_state.all_wallet_names = all_wallets_df["display_name"].tolist()
+
+                if all_fills:
+                    st.session_state.activity_fills = pd.DataFrame(all_fills)
+                    st.success(f"✅ Found {len(all_fills)} trades across all wallets in {date_label}")
+                else:
+                    st.warning(f"No trades found for {date_label}")
+                    st.session_state.activity_fills = pd.DataFrame()
             else:
                 # Fetch single wallet
                 wallet_row = portfolio_df[portfolio_df["display_name"] == selected_wallet].iloc[0]
