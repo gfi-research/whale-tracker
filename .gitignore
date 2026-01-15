@@ -37,3 +37,6 @@ data/
 # Environment
 .env
 .env.local
+
+# Agent context
+AGENT.md
