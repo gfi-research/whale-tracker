@@ -12,10 +12,29 @@ import plotly.graph_objects as go
 import plotly.express as px
 from pathlib import Path
 import time
+import threading
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from src.api.hyperliquid import HyperliquidClient, get_mock_portfolio_breakdown, TradeFill
 from src.utils.formatters import format_currency
+
+
+class RateLimiter:
+    """Simple rate limiter to avoid 429 errors."""
+    def __init__(self, calls_per_second=5):
+        self.calls_per_second = calls_per_second
+        self.min_interval = 1.0 / calls_per_second
+        self.last_call = 0
+        self.lock = threading.Lock()
+
+    def wait(self):
+        """Wait if necessary to respect rate limit."""
+        with self.lock:
+            now = time.time()
+            elapsed = now - self.last_call
+            if elapsed < self.min_interval:
+                time.sleep(self.min_interval - elapsed)
+            self.last_call = time.time()
 
 # Color palette
 COLORS = {
@@ -1291,31 +1310,43 @@ def render_whale_screener_content():
             results = []
             total_wallets = len(filtered_df)
 
-            # Helper function for parallel fetching
+            # Rate limiter: 8 requests per second to avoid 429
+            rate_limiter = RateLimiter(calls_per_second=8)
+
+            # Helper function for parallel fetching with rate limiting
             def fetch_portfolio(wallet_info):
-                """Fetch portfolio for a single wallet."""
+                """Fetch portfolio for a single wallet with retry."""
                 addr, display_name, entity = wallet_info
-                client = HyperliquidClient()
-                try:
-                    breakdown = client.get_portfolio_breakdown(addr, time_period)
-                    if breakdown and breakdown.total.account_value > 0:
-                        return {
-                            "address": addr,
-                            "display_name": display_name,
-                            "entity": entity,
-                            "total_value": breakdown.total.account_value,
-                            "perp_value": breakdown.perp.account_value,
-                            "spot_value": breakdown.spot.account_value,
-                            "perp_pct": (breakdown.perp.account_value / breakdown.total.account_value * 100) if breakdown.total.account_value > 0 else 0,
-                            "total_pnl": breakdown.total.pnl,
-                            "perp_pnl": breakdown.perp.pnl,
-                            "spot_pnl": breakdown.spot.pnl,
-                            "total_volume": breakdown.total.volume,
-                            "perp_volume": breakdown.perp.volume,
-                            "spot_volume": breakdown.spot.volume,
-                        }
-                except Exception:
-                    pass
+                max_retries = 3
+
+                for attempt in range(max_retries):
+                    rate_limiter.wait()  # Respect rate limit
+                    client = HyperliquidClient()
+                    try:
+                        breakdown = client.get_portfolio_breakdown(addr, time_period)
+                        if breakdown and breakdown.total.account_value > 0:
+                            return {
+                                "address": addr,
+                                "display_name": display_name,
+                                "entity": entity,
+                                "total_value": breakdown.total.account_value,
+                                "perp_value": breakdown.perp.account_value,
+                                "spot_value": breakdown.spot.account_value,
+                                "perp_pct": (breakdown.perp.account_value / breakdown.total.account_value * 100) if breakdown.total.account_value > 0 else 0,
+                                "total_pnl": breakdown.total.pnl,
+                                "perp_pnl": breakdown.perp.pnl,
+                                "spot_pnl": breakdown.spot.pnl,
+                                "total_volume": breakdown.total.volume,
+                                "perp_volume": breakdown.perp.volume,
+                                "spot_volume": breakdown.spot.volume,
+                            }
+                        return None
+                    except Exception as e:
+                        if "429" in str(e) and attempt < max_retries - 1:
+                            # Exponential backoff on rate limit
+                            time.sleep((attempt + 1) * 2)
+                        elif attempt == max_retries - 1:
+                            pass
                 return None
 
             # Prepare wallet list
@@ -1324,8 +1355,8 @@ def render_whale_screener_content():
                 for _, row in filtered_df.iterrows()
             ]
 
-            # Use ThreadPoolExecutor with 20 workers for faster fetching
-            max_workers = min(20, total_wallets)
+            # Use ThreadPoolExecutor with 8 workers (balanced for rate limit)
+            max_workers = min(8, total_wallets)
             completed_count = 0
 
             status_text.text(f"⚡ Parallel fetching with {max_workers} workers...")
@@ -1527,15 +1558,18 @@ def render_whale_screener_content():
                     start_time = datetime(from_date.year, from_date.month, from_date.day)
                     end_time = datetime(to_date.year, to_date.month, to_date.day, 23, 59, 59)
 
-                    # Helper function for parallel fetching
+                    # Rate limiter: 8 requests per second to avoid 429
+                    rate_limiter = RateLimiter(calls_per_second=8)
+
+                    # Helper function for parallel fetching with rate limiting
                     def fetch_wallet_fills(wallet_info):
-                        """Fetch fills for a single wallet with retries."""
+                        """Fetch fills for a single wallet with retries and rate limiting."""
                         wallet_address, wallet_name = wallet_info
-                        client = HyperliquidClient()
                         max_retries = 3
-                        retry_delay = 0.3
 
                         for attempt in range(max_retries):
+                            rate_limiter.wait()  # Respect rate limit
+                            client = HyperliquidClient()
                             try:
                                 fills = client.get_user_fills_paginated(
                                     wallet_address,
@@ -1545,11 +1579,13 @@ def render_whale_screener_content():
                                 )
                                 if fills:
                                     return [(wallet_name, f) for f in fills]
-                                if attempt < max_retries - 1:
-                                    time.sleep(retry_delay)
-                            except Exception:
-                                if attempt < max_retries - 1:
-                                    time.sleep(retry_delay)
+                                return []
+                            except Exception as e:
+                                if "429" in str(e) and attempt < max_retries - 1:
+                                    # Exponential backoff on rate limit
+                                    time.sleep((attempt + 1) * 2)
+                                elif attempt < max_retries - 1:
+                                    time.sleep(0.5)
                         return []
 
                     # Prepare wallet list for parallel processing
@@ -1558,9 +1594,8 @@ def render_whale_screener_content():
                         for _, row in all_wallets_df.iterrows()
                     ]
 
-                    # Use ThreadPoolExecutor for parallel fetching
-                    # Use 20 workers for faster fetching
-                    max_workers = min(20, total_wallets)
+                    # Use ThreadPoolExecutor with 8 workers (balanced for rate limit)
+                    max_workers = min(8, total_wallets)
                     completed_count = 0
 
                     status_text.text(f"⚡ Parallel fetching with {max_workers} workers...")
