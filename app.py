@@ -1281,7 +1281,7 @@ def render_whale_screener_content():
         st.caption("GitHub-style heatmap showing trading activity over time")
 
         # Wallet selector for activity
-        col1, col2, col3, col4 = st.columns([2, 0.7, 0.7, 0.8])
+        col1, col2, col3, col4 = st.columns([2, 1, 1, 0.8])
         with col1:
             wallet_options = ["📊 All Wallets"] + portfolio_df["display_name"].tolist()
             selected_wallet = st.selectbox(
@@ -1290,38 +1290,39 @@ def render_whale_screener_content():
                 key="activity_wallet"
             )
         with col2:
-            current_year = datetime.now().year
-            from_year = st.number_input(
-                "From Year",
-                min_value=2020,
-                max_value=current_year,
-                value=current_year,
-                step=1,
-                key="from_year_input"
+            from_date = st.date_input(
+                "From Date",
+                value=datetime(datetime.now().year, 1, 1),
+                min_value=datetime(2020, 1, 1),
+                max_value=datetime.now(),
+                key="from_date_input"
             )
         with col3:
-            to_year = st.number_input(
-                "To Year",
-                min_value=2020,
-                max_value=current_year,
-                value=current_year,
-                step=1,
-                key="to_year_input"
+            to_date = st.date_input(
+                "To Date",
+                value=datetime.now(),
+                min_value=datetime(2020, 1, 1),
+                max_value=datetime.now(),
+                key="to_date_input"
             )
         with col4:
+            st.write("")  # Spacer for alignment
             fetch_activity = st.button("🔄 Fetch Activity", type="primary", key="fetch_activity_btn")
 
-        # Validate year range
-        if from_year > to_year:
-            st.error("⚠️ 'From Year' must be <= 'To Year'")
+        # Validate date range
+        if from_date > to_date:
+            st.error("⚠️ 'From Date' must be <= 'To Date'")
 
         # Legend
         st.markdown(create_activity_legend(), unsafe_allow_html=True)
 
-        if fetch_activity and from_year <= to_year:
+        if fetch_activity and from_date <= to_date:
             is_all_wallets = selected_wallet == "📊 All Wallets"
+            # Extract years for calendar display
+            from_year = from_date.year
+            to_year = to_date.year
             year_range = list(range(from_year, to_year + 1))
-            year_label = f"{from_year}" if from_year == to_year else f"{from_year}-{to_year}"
+            date_label = f"{from_date.strftime('%d/%m/%Y')} - {to_date.strftime('%d/%m/%Y')}"
 
             if is_all_wallets:
                 # Use filtered_df (original CSV list) instead of portfolio_df to get ALL wallets
@@ -1329,14 +1330,14 @@ def render_whale_screener_content():
                 total_wallets = len(all_wallets_df)
 
                 # Fetch from all wallets
-                with st.spinner(f"Fetching trades for all {total_wallets} wallets ({year_label})..."):
+                with st.spinner(f"Fetching trades for all {total_wallets} wallets ({date_label})..."):
                     client = HyperliquidClient()
                     progress_bar = st.progress(0)
                     status_text = st.empty()
 
                     all_fills = []
-                    start_time = datetime(from_year, 1, 1)
-                    end_time = datetime(to_year, 12, 31, 23, 59, 59)
+                    start_time = datetime(from_date.year, from_date.month, from_date.day)
+                    end_time = datetime(to_date.year, to_date.month, to_date.day, 23, 59, 59)
 
                     max_retries = 3
                     retry_delay = 0.5  # seconds between retries
@@ -1393,9 +1394,9 @@ def render_whale_screener_content():
 
                     if all_fills:
                         st.session_state.activity_fills = pd.DataFrame(all_fills)
-                        st.success(f"✅ Found {len(all_fills)} trades across all wallets in {year_label}")
+                        st.success(f"✅ Found {len(all_fills)} trades across all wallets in {date_label}")
                     else:
-                        st.warning(f"No trades found for {year_label}")
+                        st.warning(f"No trades found for {date_label}")
                         st.session_state.activity_fills = pd.DataFrame()
             else:
                 # Fetch single wallet
@@ -1412,11 +1413,11 @@ def render_whale_screener_content():
                 for attempt in range(max_retries):
                     retry_text = f" (retry {attempt})" if attempt > 0 else ""
                     with status_placeholder.container():
-                        with st.spinner(f"Fetching trades for {selected_wallet} ({year_label}){retry_text}..."):
+                        with st.spinner(f"Fetching trades for {selected_wallet} ({date_label}){retry_text}..."):
                             client = HyperliquidClient()
 
-                            start_time = datetime(from_year, 1, 1)
-                            end_time = datetime(to_year, 12, 31, 23, 59, 59)
+                            start_time = datetime(from_date.year, from_date.month, from_date.day)
+                            end_time = datetime(to_date.year, to_date.month, to_date.day, 23, 59, 59)
 
                             try:
                                 # Use paginated fetch to get up to 10,000 trades
@@ -1456,9 +1457,9 @@ def render_whale_screener_content():
                     } for f in fills])
 
                     st.session_state.activity_fills = fills_df
-                    st.success(f"✅ Found {len(fills)} trades in {year_label}")
+                    st.success(f"✅ Found {len(fills)} trades in {date_label}")
                 else:
-                    st.warning(f"No trades found for {year_label} after {max_retries} attempts")
+                    st.warning(f"No trades found for {date_label} after {max_retries} attempts")
                     st.session_state.activity_fills = pd.DataFrame()
 
         # Display calendar if data exists
