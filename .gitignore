@@ -25,6 +25,7 @@ Thumbs.db
 # Local plans and cache
 .claude/
 plans/
+docs/
 
 # Secrets and credentials
 local_settings.py
