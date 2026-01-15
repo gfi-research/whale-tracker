@@ -1683,33 +1683,36 @@ def render_whale_screener_content():
             # Create single combined calendar for the selected date range
             fig = create_activity_calendar_range(fills_df, cal_from_date, cal_to_date)
 
-            # Display calendar with click event capture
-            calendar_event = st.plotly_chart(
+            # Display calendar
+            st.plotly_chart(
                 fig,
                 use_container_width=True,
                 config={"displayModeBar": False},
-                key=f"main_calendar_{cal_from_date}_{cal_to_date}",
-                on_select="rerun"
+                key=f"main_calendar_{cal_from_date}_{cal_to_date}"
             )
 
-            # Handle calendar click event
-            if calendar_event and calendar_event.selection and len(calendar_event.selection.points) > 0:
-                point = calendar_event.selection.points[0]
-                # Get the clicked date from customdata
-                if 'customdata' in point and point['customdata']:
-                    clicked_date = point['customdata']
-                    if clicked_date and clicked_date != "":
-                        st.session_state.selected_calendar_date = clicked_date
+            # Date selector for viewing details
+            if len(fills_df) > 0:
+                fills_df_temp = fills_df.copy()
+                fills_df_temp['date'] = pd.to_datetime(fills_df_temp['timestamp']).dt.date
+                available_dates = sorted(fills_df_temp['date'].unique(), reverse=True)
 
-            # Show date details popup if a date is selected
-            if "selected_calendar_date" in st.session_state and st.session_state.selected_calendar_date:
-                with st.expander(f"📅 Details for {st.session_state.selected_calendar_date}", expanded=True):
-                    col1, col2 = st.columns([6, 1])
-                    with col2:
-                        if st.button("✖️ Close", key="close_date_popup"):
-                            st.session_state.selected_calendar_date = None
-                            st.rerun()
-                    render_date_details_popup(fills_df, st.session_state.selected_calendar_date)
+                st.markdown("### 🔍 View Date Details")
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    # Convert to list of date strings for selectbox
+                    date_options = ["Select a date..."] + [d.strftime('%Y-%m-%d') for d in available_dates]
+                    selected_date_str = st.selectbox(
+                        "Select date to view details",
+                        options=date_options,
+                        key="date_detail_selector",
+                        label_visibility="collapsed"
+                    )
+
+                # Show details if a date is selected
+                if selected_date_str != "Select a date...":
+                    st.divider()
+                    render_date_details_popup(fills_df, selected_date_str)
 
             if len(fills_df) > 0:
                 st.divider()
@@ -1738,40 +1741,6 @@ def render_whale_screener_content():
                     st.metric("🔴 Open Short", f"{open_short:,}")
                 with col4:
                     st.metric("🟠 Close Short", f"{close_short:,}")
-
-                # Debug section - Date details
-                with st.expander("🔍 Debug: Date Details", expanded=True):
-                    import pytz
-                    from datetime import timezone as tz
-
-                    st.markdown("**⏰ Timezone Info:**")
-                    local_now = datetime.now()
-                    utc_now = datetime.utcnow()
-                    tz_offset = (local_now - utc_now).total_seconds() / 3600
-                    st.code(f"Local Now: {local_now.strftime('%Y-%m-%d %H:%M:%S')}\nUTC Now:   {utc_now.strftime('%Y-%m-%d %H:%M:%S')}\nTimezone Offset: UTC+{tz_offset:.0f}h")
-
-                    st.markdown("**📊 Data Date Range (Local Time):**")
-                    min_date = fills_df['timestamp'].min()
-                    max_date = fills_df['timestamp'].max()
-                    st.code(f"Oldest Trade: {min_date}\nNewest Trade: {max_date}")
-
-                    st.markdown("**📅 Trades by Date:**")
-                    fills_df_debug = fills_df.copy()
-                    fills_df_debug['date'] = fills_df_debug['timestamp'].dt.date
-                    date_counts = fills_df_debug.groupby('date').agg({
-                        'coin': 'count',
-                        'direction': lambda x: ', '.join(x.value_counts().head(2).index.tolist())
-                    }).reset_index()
-                    date_counts.columns = ['Date', 'Trade Count', 'Top Directions']
-                    date_counts = date_counts.sort_values('Date', ascending=False)
-                    st.dataframe(date_counts, hide_index=True, use_container_width=True, height=300)
-
-                    st.markdown("**🔢 Raw Timestamps (Newest 20):**")
-                    raw_ts = fills_df.sort_values('timestamp', ascending=False).head(20)[['timestamp', 'coin', 'direction', 'size', 'price']].copy()
-                    raw_ts['local_time'] = raw_ts['timestamp'].dt.strftime('%Y-%m-%d %H:%M:%S')
-                    raw_ts['unix_ms'] = raw_ts['timestamp'].apply(lambda x: int(x.timestamp() * 1000))
-                    raw_ts = raw_ts[['local_time', 'unix_ms', 'coin', 'direction', 'size', 'price']]
-                    st.dataframe(raw_ts, hide_index=True, use_container_width=True)
 
                 # Show all wallets detail heatmap if in all mode
                 is_all_mode = st.session_state.get("activity_mode", "single") == "all"
@@ -1816,7 +1785,7 @@ def render_whale_screener_content():
                     all_wallet_names = st.session_state.get("all_wallet_names", None)
                     all_wallets_fig = create_all_wallets_heatmap(fills_df.copy(), cal_from_date, cal_to_date, all_wallet_names)
                     if all_wallets_fig:
-                        all_wallets_event = st.plotly_chart(
+                        st.plotly_chart(
                             all_wallets_fig,
                             use_container_width=True,
                             config={
@@ -1824,42 +1793,8 @@ def render_whale_screener_content():
                                 "modeBarButtonsToRemove": ["lasso2d", "select2d"],
                                 "displaylogo": False
                             },
-                            key=f"all_wallets_heatmap_{cal_from_date}_{cal_to_date}",
-                            on_select="rerun"
+                            key=f"all_wallets_heatmap_{cal_from_date}_{cal_to_date}"
                         )
-
-                        # Handle all wallets heatmap click event
-                        if all_wallets_event and all_wallets_event.selection and len(all_wallets_event.selection.points) > 0:
-                            point = all_wallets_event.selection.points[0]
-                            if 'customdata' in point and point['customdata']:
-                                click_data = point['customdata']
-                                if click_data and '|' in str(click_data):
-                                    parts = click_data.split('|')
-                                    clicked_date = parts[0]
-                                    clicked_wallet = parts[1] if len(parts) > 1 else None
-                                    if clicked_date and clicked_date != "":
-                                        st.session_state.selected_calendar_date = clicked_date
-                                        st.session_state.selected_calendar_wallet = clicked_wallet
-
-                        # Show date details popup for all wallets heatmap
-                        if "selected_calendar_date" in st.session_state and st.session_state.selected_calendar_date:
-                            selected_wallet = st.session_state.get("selected_calendar_wallet", None)
-                            popup_title = f"📅 Details for {st.session_state.selected_calendar_date}"
-                            if selected_wallet:
-                                popup_title += f" - {selected_wallet[:30]}"
-                            with st.expander(popup_title, expanded=True):
-                                col1, col2 = st.columns([6, 1])
-                                with col2:
-                                    if st.button("✖️ Close", key="close_all_wallets_popup"):
-                                        st.session_state.selected_calendar_date = None
-                                        st.session_state.selected_calendar_wallet = None
-                                        st.rerun()
-                                # Filter by wallet if clicked on specific wallet
-                                if selected_wallet:
-                                    wallet_fills = fills_df[fills_df['wallet'] == selected_wallet].copy()
-                                    render_date_details_popup(wallet_fills, st.session_state.selected_calendar_date)
-                                else:
-                                    render_date_details_popup(fills_df, st.session_state.selected_calendar_date)
 
                 st.divider()
 
