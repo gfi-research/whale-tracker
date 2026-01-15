@@ -543,6 +543,113 @@ def create_activity_legend():
     """
 
 
+def render_date_details_popup(fills_df: pd.DataFrame, selected_date: str):
+    """
+    Render a popup/dialog showing detailed transaction info for a specific date.
+
+    Args:
+        fills_df: DataFrame with trade fills
+        selected_date: Date string in 'YYYY-MM-DD' format
+    """
+    if fills_df is None or len(fills_df) == 0:
+        st.warning(f"No data available for {selected_date}")
+        return
+
+    # Filter fills for the selected date
+    fills_df = fills_df.copy()
+    fills_df['date'] = pd.to_datetime(fills_df['timestamp']).dt.date
+    selected_date_obj = pd.to_datetime(selected_date).date()
+    day_fills = fills_df[fills_df['date'] == selected_date_obj]
+
+    if len(day_fills) == 0:
+        st.info(f"📅 **{selected_date}** - No trades on this date")
+        return
+
+    # Header with date and summary
+    st.markdown(f"""
+    <div style="
+        background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 16px;
+        border: 1px solid #3b82f6;
+    ">
+        <h3 style="margin: 0; color: #f1f5f9; font-size: 20px;">📅 Transaction Details: {selected_date}</h3>
+        <p style="margin: 8px 0 0 0; color: #94a3b8; font-size: 14px;">
+            {len(day_fills)} trades found
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Summary metrics for this date
+    open_long = len(day_fills[day_fills['direction'] == 'Open Long'])
+    close_long = len(day_fills[day_fills['direction'] == 'Close Long'])
+    open_short = len(day_fills[day_fills['direction'] == 'Open Short'])
+    close_short = len(day_fills[day_fills['direction'] == 'Close Short'])
+    day_pnl = day_fills['pnl'].sum()
+
+    col1, col2, col3, col4, col5 = st.columns(5)
+    with col1:
+        st.metric("Total Trades", len(day_fills))
+    with col2:
+        st.metric("🟢 Open Long", open_long)
+    with col3:
+        st.metric("🔵 Close Long", close_long)
+    with col4:
+        st.metric("🔴 Open Short", open_short)
+    with col5:
+        st.metric("🟠 Close Short", close_short)
+
+    st.metric("💰 Day PnL", format_currency(day_pnl))
+
+    # Wallets with activity on this date
+    if 'wallet' in day_fills.columns:
+        st.markdown("### 👛 Wallets with Activity")
+        wallet_summary = day_fills.groupby('wallet').agg({
+            'coin': 'count',
+            'pnl': 'sum',
+            'direction': lambda x: list(x.value_counts().head(2).index)
+        }).reset_index()
+        wallet_summary.columns = ['Wallet', 'Trades', 'PnL', 'Top Directions']
+        wallet_summary = wallet_summary.sort_values('Trades', ascending=False)
+        wallet_summary['PnL'] = wallet_summary['PnL'].apply(lambda x: format_currency(x))
+        wallet_summary['Top Directions'] = wallet_summary['Top Directions'].apply(lambda x: ', '.join(x))
+        st.dataframe(wallet_summary, hide_index=True, use_container_width=True)
+
+    # Trading pairs breakdown
+    st.markdown("### 🪙 Trading Pairs")
+    coin_summary = day_fills.groupby('coin').agg({
+        'direction': 'count',
+        'pnl': 'sum',
+        'size': 'sum'
+    }).reset_index()
+    coin_summary.columns = ['Coin', 'Trades', 'PnL', 'Total Size']
+    coin_summary = coin_summary.sort_values('Trades', ascending=False)
+    coin_summary['PnL'] = coin_summary['PnL'].apply(lambda x: format_currency(x))
+    coin_summary['Total Size'] = coin_summary['Total Size'].apply(lambda x: f"{x:,.4f}")
+    st.dataframe(coin_summary, hide_index=True, use_container_width=True)
+
+    # Detailed trades table
+    st.markdown("### 📜 All Trades")
+    trades_display = day_fills.sort_values('timestamp', ascending=False).copy()
+    trades_display['timestamp'] = trades_display['timestamp'].dt.strftime('%H:%M:%S')
+    trades_display['size'] = trades_display['size'].apply(lambda x: f"{x:,.4f}")
+    trades_display['price'] = trades_display['price'].apply(lambda x: f"${x:,.2f}")
+    trades_display['pnl'] = trades_display['pnl'].apply(lambda x: format_currency(x))
+    trades_display['fee'] = trades_display['fee'].apply(lambda x: f"${x:,.4f}")
+
+    if 'wallet' in trades_display.columns:
+        display_cols = ['timestamp', 'wallet', 'coin', 'direction', 'side', 'size', 'price', 'pnl', 'fee']
+        trades_display = trades_display[display_cols]
+        trades_display.columns = ['Time', 'Wallet', 'Coin', 'Direction', 'Side', 'Size', 'Price', 'PnL', 'Fee']
+    else:
+        display_cols = ['timestamp', 'coin', 'direction', 'side', 'size', 'price', 'pnl', 'fee']
+        trades_display = trades_display[display_cols]
+        trades_display.columns = ['Time', 'Coin', 'Direction', 'Side', 'Size', 'Price', 'PnL', 'Fee']
+
+    st.dataframe(trades_display, hide_index=True, use_container_width=True, height=400)
+
+
 def create_activity_calendar_range(fills_df: pd.DataFrame, from_date, to_date):
     """
     Create a single combined activity calendar heatmap for a date range.
@@ -652,15 +759,18 @@ def create_activity_calendar_range(fills_df: pd.DataFrame, from_date, to_date):
                 else:  # os == max_count
                     display_values[i, j] = 0.1  # Open Short - Red
 
-    # Create hover text - show only dominant activity type per day
+    # Create hover text and customdata (dates) for click handling
     hover_text = []
+    customdata = []  # Store dates for click events
     day_names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
     for day_idx in range(num_days):
         row_text = []
+        row_dates = []
         for week_idx in range(num_weeks):
             try:
                 date = start_date + timedelta(weeks=week_idx, days=day_idx)
                 if start_date <= date <= end_date:
+                    row_dates.append(date.strftime('%Y-%m-%d'))
                     ol = int(open_long_matrix[day_idx, week_idx])
                     cl = int(close_long_matrix[day_idx, week_idx])
                     os = int(open_short_matrix[day_idx, week_idx])
@@ -682,15 +792,19 @@ def create_activity_calendar_range(fills_df: pd.DataFrame, from_date, to_date):
                         row_text.append(
                             f"<b>{date.strftime('%Y-%m-%d')}</b><br>"
                             f"{dominant_emoji} {dominant_name}: {dominant_count}<br>"
-                            f"<b>Total: {total}</b>"
+                            f"<b>Total: {total}</b><br>"
+                            f"<i>Click for details</i>"
                         )
                     else:
                         row_text.append(f"{date.strftime('%Y-%m-%d')}<br>No activity")
                 else:
                     row_text.append("")
+                    row_dates.append("")
             except:
                 row_text.append("")
+                row_dates.append("")
         hover_text.append(row_text)
+        customdata.append(row_dates)
 
     # Create month/year labels for x-axis
     month_labels = []
@@ -717,13 +831,14 @@ def create_activity_calendar_range(fills_df: pd.DataFrame, from_date, to_date):
         showscale=False,
         hoverinfo='text',
         text=hover_text,
+        customdata=customdata,
         xgap=2,
         ygap=2,
     ))
 
     # Create title based on date range
     date_format = '%d/%m/%Y'
-    title_text = f"Trading Activity: {start_date.strftime(date_format)} - {end_date.strftime(date_format)}"
+    title_text = f"Trading Activity: {start_date.strftime(date_format)} - {end_date.strftime(date_format)} (Click a cell for details)"
 
     fig.update_layout(
         title=dict(text=title_text, font=dict(size=18, color=COLORS["text"]), x=0.5),
@@ -871,16 +986,20 @@ def create_all_wallets_heatmap(fills_df: pd.DataFrame, from_date=None, to_date=N
                 else:  # os == max_count
                     display_values[i, j] = 0.1  # Open Short - Red
 
-    # Create hover text - show only dominant activity type per day
+    # Create hover text and customdata for click handling
     hover_text = []
+    customdata = []  # Store [date, wallet] for click events
     for wallet_idx, wallet in enumerate(wallets):
         row_text = []
+        row_data = []
         for day_idx, date in enumerate(all_dates):
             ol = int(open_long_matrix[wallet_idx, day_idx])
             cl = int(close_long_matrix[wallet_idx, day_idx])
             os = int(open_short_matrix[wallet_idx, day_idx])
             cs = int(close_short_matrix[wallet_idx, day_idx])
             total = ol + cl + os + cs
+            # Store date and wallet for click events
+            row_data.append(f"{date.strftime('%Y-%m-%d')}|{wallet}")
             if total > 0:
                 # Find dominant activity type
                 activities = {
@@ -898,7 +1017,8 @@ def create_all_wallets_heatmap(fills_df: pd.DataFrame, from_date=None, to_date=N
                     f"<b>{wallet[:25]}</b><br>"
                     f"<b>{date.strftime('%b %d, %Y')}</b><br>"
                     f"{dominant_emoji} {dominant_name}: {dominant_count}<br>"
-                    f"<b>Total: {total}</b>"
+                    f"<b>Total: {total}</b><br>"
+                    f"<i>Click for details</i>"
                 )
             else:
                 row_text.append(
@@ -907,6 +1027,7 @@ def create_all_wallets_heatmap(fills_df: pd.DataFrame, from_date=None, to_date=N
                     f"<span style='color:#64748b'>No activity</span>"
                 )
         hover_text.append(row_text)
+        customdata.append(row_data)
 
     # Better wallet label formatting
     wallet_labels = [w[:32] + "..." if len(w) > 35 else w for w in wallets]
@@ -936,6 +1057,7 @@ def create_all_wallets_heatmap(fills_df: pd.DataFrame, from_date=None, to_date=N
         showscale=False,
         hoverinfo='text',
         text=hover_text,
+        customdata=customdata,
         xgap=1,
         ygap=3,
         hoverongaps=False,
@@ -1512,7 +1634,34 @@ def render_whale_screener_content():
 
             # Create single combined calendar for the selected date range
             fig = create_activity_calendar_range(fills_df, cal_from_date, cal_to_date)
-            st.plotly_chart(fig, width="stretch", config={"displayModeBar": False}, key=f"main_calendar_{cal_from_date}_{cal_to_date}")
+
+            # Display calendar with click event capture
+            calendar_event = st.plotly_chart(
+                fig,
+                use_container_width=True,
+                config={"displayModeBar": False},
+                key=f"main_calendar_{cal_from_date}_{cal_to_date}",
+                on_select="rerun"
+            )
+
+            # Handle calendar click event
+            if calendar_event and calendar_event.selection and len(calendar_event.selection.points) > 0:
+                point = calendar_event.selection.points[0]
+                # Get the clicked date from customdata
+                if 'customdata' in point and point['customdata']:
+                    clicked_date = point['customdata']
+                    if clicked_date and clicked_date != "":
+                        st.session_state.selected_calendar_date = clicked_date
+
+            # Show date details popup if a date is selected
+            if "selected_calendar_date" in st.session_state and st.session_state.selected_calendar_date:
+                with st.expander(f"📅 Details for {st.session_state.selected_calendar_date}", expanded=True):
+                    col1, col2 = st.columns([6, 1])
+                    with col2:
+                        if st.button("✖️ Close", key="close_date_popup"):
+                            st.session_state.selected_calendar_date = None
+                            st.rerun()
+                    render_date_details_popup(fills_df, st.session_state.selected_calendar_date)
 
             if len(fills_df) > 0:
                 st.divider()
@@ -1619,11 +1768,50 @@ def render_whale_screener_content():
                     all_wallet_names = st.session_state.get("all_wallet_names", None)
                     all_wallets_fig = create_all_wallets_heatmap(fills_df.copy(), cal_from_date, cal_to_date, all_wallet_names)
                     if all_wallets_fig:
-                        st.plotly_chart(all_wallets_fig, width="stretch", config={
-                            "displayModeBar": True,
-                            "modeBarButtonsToRemove": ["lasso2d", "select2d"],
-                            "displaylogo": False
-                        }, key=f"all_wallets_heatmap_{cal_from_date}_{cal_to_date}")
+                        all_wallets_event = st.plotly_chart(
+                            all_wallets_fig,
+                            use_container_width=True,
+                            config={
+                                "displayModeBar": True,
+                                "modeBarButtonsToRemove": ["lasso2d", "select2d"],
+                                "displaylogo": False
+                            },
+                            key=f"all_wallets_heatmap_{cal_from_date}_{cal_to_date}",
+                            on_select="rerun"
+                        )
+
+                        # Handle all wallets heatmap click event
+                        if all_wallets_event and all_wallets_event.selection and len(all_wallets_event.selection.points) > 0:
+                            point = all_wallets_event.selection.points[0]
+                            if 'customdata' in point and point['customdata']:
+                                click_data = point['customdata']
+                                if click_data and '|' in str(click_data):
+                                    parts = click_data.split('|')
+                                    clicked_date = parts[0]
+                                    clicked_wallet = parts[1] if len(parts) > 1 else None
+                                    if clicked_date and clicked_date != "":
+                                        st.session_state.selected_calendar_date = clicked_date
+                                        st.session_state.selected_calendar_wallet = clicked_wallet
+
+                        # Show date details popup for all wallets heatmap
+                        if "selected_calendar_date" in st.session_state and st.session_state.selected_calendar_date:
+                            selected_wallet = st.session_state.get("selected_calendar_wallet", None)
+                            popup_title = f"📅 Details for {st.session_state.selected_calendar_date}"
+                            if selected_wallet:
+                                popup_title += f" - {selected_wallet[:30]}"
+                            with st.expander(popup_title, expanded=True):
+                                col1, col2 = st.columns([6, 1])
+                                with col2:
+                                    if st.button("✖️ Close", key="close_all_wallets_popup"):
+                                        st.session_state.selected_calendar_date = None
+                                        st.session_state.selected_calendar_wallet = None
+                                        st.rerun()
+                                # Filter by wallet if clicked on specific wallet
+                                if selected_wallet:
+                                    wallet_fills = fills_df[fills_df['wallet'] == selected_wallet].copy()
+                                    render_date_details_popup(wallet_fills, st.session_state.selected_calendar_date)
+                                else:
+                                    render_date_details_popup(fills_df, st.session_state.selected_calendar_date)
 
                 st.divider()
 
