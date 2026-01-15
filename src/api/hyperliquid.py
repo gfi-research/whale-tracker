@@ -2,9 +2,41 @@
 
 import requests
 import time as time_module
+import threading
 from typing import Optional, List, Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+
+
+# Global rate limiter shared across all HyperliquidClient instances
+class GlobalRateLimiter:
+    """Thread-safe global rate limiter for Hyperliquid API."""
+    _instance = None
+    _lock = threading.Lock()
+
+    def __new__(cls):
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
+                    cls._instance.calls_per_second = 4  # Conservative: 4 req/sec
+                    cls._instance.min_interval = 1.0 / cls._instance.calls_per_second
+                    cls._instance.last_call = 0
+                    cls._instance.call_lock = threading.Lock()
+        return cls._instance
+
+    def wait(self):
+        """Wait if necessary to respect rate limit."""
+        with self.call_lock:
+            now = time_module.time()
+            elapsed = now - self.last_call
+            if elapsed < self.min_interval:
+                time_module.sleep(self.min_interval - elapsed)
+            self.last_call = time_module.time()
+
+
+# Singleton instance
+_global_rate_limiter = GlobalRateLimiter()
 
 
 @dataclass
@@ -44,6 +76,27 @@ class HyperliquidClient:
     def __init__(self):
         self.session = requests.Session()
         self.session.headers.update({"Content-Type": "application/json"})
+        self.rate_limiter = _global_rate_limiter
+        self.max_retries = 5
+
+    def _make_request(self, payload: dict) -> Optional[dict]:
+        """Make API request with rate limiting and retry logic."""
+        for attempt in range(self.max_retries):
+            self.rate_limiter.wait()  # Global rate limiting
+            try:
+                response = self.session.post(self.BASE_URL, json=payload)
+                response.raise_for_status()
+                return response.json()
+            except requests.RequestException as e:
+                if "429" in str(e):
+                    # Exponential backoff on rate limit
+                    wait_time = (2 ** attempt) + 1  # 3, 5, 9, 17, 33 seconds
+                    time_module.sleep(wait_time)
+                elif attempt == self.max_retries - 1:
+                    raise
+                else:
+                    time_module.sleep(0.5)
+        return None
 
     def get_portfolio(self, user_address: str) -> Optional[dict]:
         """
@@ -56,12 +109,7 @@ class HyperliquidClient:
             Raw portfolio response or None if error
         """
         try:
-            response = self.session.post(
-                self.BASE_URL,
-                json={"type": "portfolio", "user": user_address}
-            )
-            response.raise_for_status()
-            return response.json()
+            return self._make_request({"type": "portfolio", "user": user_address})
         except requests.RequestException as e:
             print(f"Error fetching portfolio: {e}")
             return None
@@ -255,9 +303,8 @@ class HyperliquidClient:
                     "endTime": int(current_end.timestamp() * 1000)
                 }
 
-                response = self.session.post(self.BASE_URL, json=payload)
-                response.raise_for_status()
-                raw_fills = response.json()
+                # Use _make_request for rate limiting and retry
+                raw_fills = self._make_request(payload)
 
                 if not raw_fills:
                     break  # No more data
@@ -296,10 +343,7 @@ class HyperliquidClient:
 
                 page += 1
 
-                # Small delay to respect rate limits
-                time_module.sleep(0.1)
-
-            except requests.RequestException as e:
+            except Exception as e:
                 print(f"Error fetching fills page {page}: {e}")
                 break
 
