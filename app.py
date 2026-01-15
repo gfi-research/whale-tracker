@@ -543,13 +543,31 @@ def create_activity_legend():
     """
 
 
-def create_activity_calendar_range(fills_df: pd.DataFrame, from_year: int, to_year: int):
+def create_activity_calendar_range(fills_df: pd.DataFrame, from_date, to_date):
     """
     Create a single combined activity calendar heatmap for a date range.
-    Shows all years in one continuous heatmap with 4 trade types.
+    Shows only the selected date range with 4 trade types.
+
+    Args:
+        fills_df: DataFrame with trade fills
+        from_date: Start date (datetime, date, or year int)
+        to_date: End date (datetime, date, or year int)
     """
-    start_date = datetime(from_year, 1, 1)
-    end_date = datetime(to_year, 12, 31)
+    # Handle different input types for backwards compatibility
+    if isinstance(from_date, int):
+        start_date = datetime(from_date, 1, 1)
+    elif hasattr(from_date, 'year'):
+        start_date = datetime(from_date.year, from_date.month, from_date.day)
+    else:
+        start_date = from_date
+
+    if isinstance(to_date, int):
+        end_date = datetime(to_date, 12, 31)
+    elif hasattr(to_date, 'year'):
+        end_date = datetime(to_date.year, to_date.month, to_date.day)
+    else:
+        end_date = to_date
+
     all_dates = pd.date_range(start=start_date, end=end_date, freq='D')
 
     # Calculate total weeks across all years
@@ -677,6 +695,8 @@ def create_activity_calendar_range(fills_df: pd.DataFrame, from_year: int, to_ye
     # Create month/year labels for x-axis
     month_labels = []
     month_positions = []
+    from_year = start_date.year
+    to_year = end_date.year
     for year in range(from_year, to_year + 1):
         for m in range(1, 13):
             try:
@@ -701,7 +721,9 @@ def create_activity_calendar_range(fills_df: pd.DataFrame, from_year: int, to_ye
         ygap=2,
     ))
 
-    title_text = f"Trading Activity Calendar {from_year}" if from_year == to_year else f"Trading Activity Calendar {from_year} - {to_year}"
+    # Create title based on date range
+    date_format = '%d/%m/%Y'
+    title_text = f"Trading Activity: {start_date.strftime(date_format)} - {end_date.strftime(date_format)}"
 
     fig.update_layout(
         title=dict(text=title_text, font=dict(size=18, color=COLORS["text"]), x=0.5),
@@ -723,7 +745,7 @@ def create_activity_calendar_range(fills_df: pd.DataFrame, from_year: int, to_ye
     return fig
 
 
-def create_all_wallets_heatmap(fills_df: pd.DataFrame, from_year: int = None, to_year: int = None, all_wallet_names: list = None):
+def create_all_wallets_heatmap(fills_df: pd.DataFrame, from_date=None, to_date=None, all_wallet_names: list = None):
     """
     Create a beautiful combined heatmap showing all wallets' activity for a date range.
     Y-axis: Wallet names
@@ -731,14 +753,26 @@ def create_all_wallets_heatmap(fills_df: pd.DataFrame, from_year: int = None, to
     Color: Green (long), Red (short), Dark (no activity)
     Hover: Shows dominant trade type per day
     """
-    if from_year is None:
-        from_year = datetime.now().year
-    if to_year is None:
-        to_year = from_year
+    # Handle different input types for backwards compatibility
+    if from_date is None:
+        start_date = datetime(datetime.now().year, 1, 1)
+    elif isinstance(from_date, int):
+        start_date = datetime(from_date, 1, 1)
+    elif hasattr(from_date, 'year'):
+        start_date = datetime(from_date.year, from_date.month, from_date.day)
+    else:
+        start_date = from_date
+
+    if to_date is None:
+        end_date = datetime.now()
+    elif isinstance(to_date, int):
+        end_date = datetime(to_date, 12, 31)
+    elif hasattr(to_date, 'year'):
+        end_date = datetime(to_date.year, to_date.month, to_date.day)
+    else:
+        end_date = to_date
 
     # Create date range
-    start_date = datetime(from_year, 1, 1)
-    end_date = datetime(to_year, 12, 31)
     all_dates = pd.date_range(start=start_date, end=end_date, freq='D')
 
     # Get wallets list - use provided list or extract from fills_df
@@ -880,6 +914,8 @@ def create_all_wallets_heatmap(fills_df: pd.DataFrame, from_year: int = None, to
     # Create month tick positions for the entire range
     month_labels = []
     month_positions = []
+    from_year = start_date.year
+    to_year = end_date.year
     for year in range(from_year, to_year + 1):
         for m in range(1, 13):
             try:
@@ -909,7 +945,8 @@ def create_all_wallets_heatmap(fills_df: pd.DataFrame, from_year: int = None, to
     row_height = 28
     chart_height = max(500, num_wallets * row_height + 120)
 
-    title_text = f"<b>📊 Trading Activity Heatmap - {from_year}</b>" if from_year == to_year else f"<b>📊 Trading Activity Heatmap - {from_year} to {to_year}</b>"
+    date_format = '%d/%m/%Y'
+    title_text = f"<b>📊 Trading Activity Heatmap: {start_date.strftime(date_format)} - {end_date.strftime(date_format)}</b>"
 
     fig.update_layout(
         title=dict(text=title_text, font=dict(size=20, color="#f1f5f9", family="Inter, sans-serif"), x=0.5, y=0.98),
@@ -1388,6 +1425,8 @@ def render_whale_screener_content():
 
                     # Always update session state
                     st.session_state.calendar_years = year_range
+                    st.session_state.calendar_from_date = from_date
+                    st.session_state.calendar_to_date = to_date
                     st.session_state.activity_mode = "all"
                     # Store all wallet names for heatmap (including those with no trades)
                     st.session_state.all_wallet_names = all_wallets_df["display_name"].tolist()
@@ -1441,6 +1480,8 @@ def render_whale_screener_content():
 
                 # Always update session state
                 st.session_state.calendar_years = year_range
+                st.session_state.calendar_from_date = from_date
+                st.session_state.calendar_to_date = to_date
                 st.session_state.activity_mode = "single"
 
                 if fills:
@@ -1465,13 +1506,13 @@ def render_whale_screener_content():
         # Display calendar if data exists
         if "activity_fills" in st.session_state:
             fills_df = st.session_state.activity_fills
-            years = st.session_state.get("calendar_years", [datetime.now().year])
+            # Get stored date range
+            cal_from_date = st.session_state.get("calendar_from_date", datetime(datetime.now().year, 1, 1))
+            cal_to_date = st.session_state.get("calendar_to_date", datetime.now())
 
-            # Create single combined calendar for the entire date range
-            from_yr = min(years)
-            to_yr = max(years)
-            fig = create_activity_calendar_range(fills_df, from_yr, to_yr)
-            st.plotly_chart(fig, width="stretch", config={"displayModeBar": False}, key=f"main_calendar_{from_yr}_{to_yr}")
+            # Create single combined calendar for the selected date range
+            fig = create_activity_calendar_range(fills_df, cal_from_date, cal_to_date)
+            st.plotly_chart(fig, width="stretch", config={"displayModeBar": False}, key=f"main_calendar_{cal_from_date}_{cal_to_date}")
 
             if len(fills_df) > 0:
                 st.divider()
@@ -1576,13 +1617,13 @@ def render_whale_screener_content():
 
                     # Single combined heatmap for all wallets
                     all_wallet_names = st.session_state.get("all_wallet_names", None)
-                    all_wallets_fig = create_all_wallets_heatmap(fills_df.copy(), from_yr, to_yr, all_wallet_names)
+                    all_wallets_fig = create_all_wallets_heatmap(fills_df.copy(), cal_from_date, cal_to_date, all_wallet_names)
                     if all_wallets_fig:
                         st.plotly_chart(all_wallets_fig, width="stretch", config={
                             "displayModeBar": True,
                             "modeBarButtonsToRemove": ["lasso2d", "select2d"],
                             "displaylogo": False
-                        }, key=f"all_wallets_heatmap_{from_yr}_{to_yr}")
+                        }, key=f"all_wallets_heatmap_{cal_from_date}_{cal_to_date}")
 
                 st.divider()
 
@@ -1682,8 +1723,8 @@ def render_whale_screener_content():
                                 st.metric("🟠 Close Short", w_close_short)
 
                             # Single combined calendar for the date range
-                            wallet_fig = create_activity_calendar_range(wallet_fills, from_yr, to_yr)
-                            st.plotly_chart(wallet_fig, width="stretch", config={"displayModeBar": False}, key=f"wallet_detail_{wallet_idx}_{from_yr}_{to_yr}")
+                            wallet_fig = create_activity_calendar_range(wallet_fills, cal_from_date, cal_to_date)
+                            st.plotly_chart(wallet_fig, width="stretch", config={"displayModeBar": False}, key=f"wallet_detail_{wallet_idx}_{cal_from_date}_{cal_to_date}")
 
                             # Top coins for this wallet
                             wallet_coins = wallet_fills.groupby('coin').agg({
