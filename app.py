@@ -1501,6 +1501,40 @@ def render_whale_screener_content():
                 with col4:
                     st.metric("🟠 Close Short", f"{close_short:,}")
 
+                # Debug section - Date details
+                with st.expander("🔍 Debug: Date Details", expanded=True):
+                    import pytz
+                    from datetime import timezone as tz
+
+                    st.markdown("**⏰ Timezone Info:**")
+                    local_now = datetime.now()
+                    utc_now = datetime.utcnow()
+                    tz_offset = (local_now - utc_now).total_seconds() / 3600
+                    st.code(f"Local Now: {local_now.strftime('%Y-%m-%d %H:%M:%S')}\nUTC Now:   {utc_now.strftime('%Y-%m-%d %H:%M:%S')}\nTimezone Offset: UTC+{tz_offset:.0f}h")
+
+                    st.markdown("**📊 Data Date Range (Local Time):**")
+                    min_date = fills_df['timestamp'].min()
+                    max_date = fills_df['timestamp'].max()
+                    st.code(f"Oldest Trade: {min_date}\nNewest Trade: {max_date}")
+
+                    st.markdown("**📅 Trades by Date:**")
+                    fills_df_debug = fills_df.copy()
+                    fills_df_debug['date'] = fills_df_debug['timestamp'].dt.date
+                    date_counts = fills_df_debug.groupby('date').agg({
+                        'coin': 'count',
+                        'direction': lambda x: ', '.join(x.value_counts().head(2).index.tolist())
+                    }).reset_index()
+                    date_counts.columns = ['Date', 'Trade Count', 'Top Directions']
+                    date_counts = date_counts.sort_values('Date', ascending=False)
+                    st.dataframe(date_counts, hide_index=True, use_container_width=True, height=300)
+
+                    st.markdown("**🔢 Raw Timestamps (Newest 20):**")
+                    raw_ts = fills_df.sort_values('timestamp', ascending=False).head(20)[['timestamp', 'coin', 'direction', 'size', 'price']].copy()
+                    raw_ts['local_time'] = raw_ts['timestamp'].dt.strftime('%Y-%m-%d %H:%M:%S')
+                    raw_ts['unix_ms'] = raw_ts['timestamp'].apply(lambda x: int(x.timestamp() * 1000))
+                    raw_ts = raw_ts[['local_time', 'unix_ms', 'coin', 'direction', 'size', 'price']]
+                    st.dataframe(raw_ts, hide_index=True, use_container_width=True)
+
                 # Show all wallets detail heatmap if in all mode
                 is_all_mode = st.session_state.get("activity_mode", "single") == "all"
                 if is_all_mode and 'wallet' in fills_df.columns:
