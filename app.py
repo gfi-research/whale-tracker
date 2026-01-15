@@ -13,6 +13,7 @@ import plotly.express as px
 from pathlib import Path
 import time
 from datetime import datetime, timedelta
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from src.api.hyperliquid import HyperliquidClient, get_mock_portfolio_breakdown, TradeFill
 from src.utils.formatters import format_currency
 
@@ -1488,9 +1489,8 @@ def render_whale_screener_content():
                 all_wallets_df = filtered_df.copy()
                 total_wallets = len(all_wallets_df)
 
-                # Fetch from all wallets
+                # Fetch from all wallets using parallel execution
                 with st.spinner(f"Fetching trades for all {total_wallets} wallets ({date_label})..."):
-                    client = HyperliquidClient()
                     progress_bar = st.progress(0)
                     status_text = st.empty()
 
@@ -1498,19 +1498,16 @@ def render_whale_screener_content():
                     start_time = datetime(from_date.year, from_date.month, from_date.day)
                     end_time = datetime(to_date.year, to_date.month, to_date.day, 23, 59, 59)
 
-                    max_retries = 3
-                    retry_delay = 0.5  # seconds between retries
+                    # Helper function for parallel fetching
+                    def fetch_wallet_fills(wallet_info):
+                        """Fetch fills for a single wallet with retries."""
+                        wallet_address, wallet_name = wallet_info
+                        client = HyperliquidClient()
+                        max_retries = 3
+                        retry_delay = 0.3
 
-                    for i, (_, row) in enumerate(all_wallets_df.iterrows()):
-                        wallet_address = row["trader_address"]  # Use trader_address from CSV
-                        wallet_name = row["display_name"]
-
-                        fills = []
                         for attempt in range(max_retries):
-                            status_text.text(f"Fetching {wallet_name[:30]}..." + (f" (retry {attempt})" if attempt > 0 else ""))
-
                             try:
-                                # Use paginated fetch to get up to 10,000 trades per wallet
                                 fills = client.get_user_fills_paginated(
                                     wallet_address,
                                     start_time,
@@ -1518,29 +1515,59 @@ def render_whale_screener_content():
                                     max_fills=10000
                                 )
                                 if fills:
-                                    break  # Got data, exit retry loop
-                                # No trades found, retry
+                                    return [(wallet_name, f) for f in fills]
                                 if attempt < max_retries - 1:
                                     time.sleep(retry_delay)
                             except Exception:
                                 if attempt < max_retries - 1:
                                     time.sleep(retry_delay)
+                        return []
 
-                        for f in fills:
-                            all_fills.append({
-                                'wallet': wallet_name,
-                                'coin': f.coin,
-                                'side': f.side,
-                                'direction': f.direction,
-                                'size': f.size,
-                                'price': f.price,
-                                'pnl': f.pnl,
-                                'timestamp': f.timestamp,
-                                'fee': f.fee
-                            })
+                    # Prepare wallet list for parallel processing
+                    wallet_list = [
+                        (row["trader_address"], row["display_name"])
+                        for _, row in all_wallets_df.iterrows()
+                    ]
 
-                        progress_bar.progress((i + 1) / total_wallets)
-                        time.sleep(0.02)
+                    # Use ThreadPoolExecutor for parallel fetching
+                    # Limit workers to avoid rate limiting (10 concurrent requests)
+                    max_workers = min(10, total_wallets)
+                    completed_count = 0
+
+                    status_text.text(f"⚡ Parallel fetching with {max_workers} workers...")
+
+                    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                        # Submit all tasks
+                        future_to_wallet = {
+                            executor.submit(fetch_wallet_fills, wallet_info): wallet_info[1]
+                            for wallet_info in wallet_list
+                        }
+
+                        # Process results as they complete
+                        for future in as_completed(future_to_wallet):
+                            wallet_name = future_to_wallet[future]
+                            completed_count += 1
+
+                            try:
+                                results = future.result()
+                                for wallet_name_result, f in results:
+                                    all_fills.append({
+                                        'wallet': wallet_name_result,
+                                        'coin': f.coin,
+                                        'side': f.side,
+                                        'direction': f.direction,
+                                        'size': f.size,
+                                        'price': f.price,
+                                        'pnl': f.pnl,
+                                        'timestamp': f.timestamp,
+                                        'fee': f.fee
+                                    })
+                            except Exception as e:
+                                pass  # Skip failed wallets
+
+                            # Update progress
+                            progress_bar.progress(completed_count / total_wallets)
+                            status_text.text(f"⚡ Fetched {completed_count}/{total_wallets} wallets ({len(all_fills)} trades found)")
 
                     progress_bar.empty()
                     status_text.empty()
