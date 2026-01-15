@@ -1,0 +1,23 @@
+# Core
+streamlit>=1.31.0
+plotly>=5.18.0
+pandas>=2.0.0
+requests>=2.31.0
+python-dotenv>=1.0.0
+numpy>=1.24.0
+
+# Visualization
+matplotlib>=3.7.0
+
+# Google Cloud (for BigQuery)
+google-cloud-storage
+google-cloud-bigquery
+google-auth
+
+# APIs
+dune-client
+ccxt
+
+# Streamlit extensions
+watchdog
+streamlit-elements
