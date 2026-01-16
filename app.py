@@ -36,7 +36,7 @@ HEATMAP_COLORSCALE = [
 ]
 
 
-@st.cache_data
+# Removed cache to allow dynamic updates from file changes
 def load_wallet_addresses():
     """Load wallet addresses from CSV file."""
     csv_path = Path(__file__).parent / "wallet_address.txt"
