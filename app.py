@@ -547,6 +547,7 @@ def create_activity_legend():
 def render_date_details_popup(fills_df: pd.DataFrame, selected_date: str):
     """
     Render a popup/dialog showing detailed transaction info for a specific date.
+    Shows VOLUME (size × price) instead of just trade count.
 
     Args:
         fills_df: DataFrame with trade fills
@@ -559,12 +560,25 @@ def render_date_details_popup(fills_df: pd.DataFrame, selected_date: str):
     # Filter fills for the selected date
     fills_df = fills_df.copy()
     fills_df['date'] = pd.to_datetime(fills_df['timestamp']).dt.date
+    fills_df['volume'] = fills_df['size'] * fills_df['price']
     selected_date_obj = pd.to_datetime(selected_date).date()
     day_fills = fills_df[fills_df['date'] == selected_date_obj]
 
     if len(day_fills) == 0:
         st.info(f"📅 **{selected_date}** - No trades on this date")
         return
+
+    # Calculate total volume
+    total_volume = day_fills['volume'].sum()
+
+    def format_vol(v):
+        """Format volume for display"""
+        if v >= 1_000_000:
+            return f"${v/1_000_000:.2f}M"
+        elif v >= 1_000:
+            return f"${v/1_000:.1f}K"
+        else:
+            return f"${v:.0f}"
 
     # Header with date and summary
     st.markdown(f"""
@@ -577,76 +591,81 @@ def render_date_details_popup(fills_df: pd.DataFrame, selected_date: str):
     ">
         <h3 style="margin: 0; color: #f1f5f9; font-size: 20px;">📅 Transaction Details: {selected_date}</h3>
         <p style="margin: 8px 0 0 0; color: #94a3b8; font-size: 14px;">
-            {len(day_fills)} trades found
+            {len(day_fills)} trades | Total Volume: {format_vol(total_volume)}
         </p>
     </div>
     """, unsafe_allow_html=True)
 
-    # Summary metrics for this date
-    open_long = len(day_fills[day_fills['direction'] == 'Open Long'])
-    close_long = len(day_fills[day_fills['direction'] == 'Close Long'])
-    open_short = len(day_fills[day_fills['direction'] == 'Open Short'])
-    close_short = len(day_fills[day_fills['direction'] == 'Close Short'])
+    # Summary metrics for this date - by VOLUME
+    open_long_vol = day_fills[day_fills['direction'] == 'Open Long']['volume'].sum()
+    close_long_vol = day_fills[day_fills['direction'] == 'Close Long']['volume'].sum()
+    open_short_vol = day_fills[day_fills['direction'] == 'Open Short']['volume'].sum()
+    close_short_vol = day_fills[day_fills['direction'] == 'Close Short']['volume'].sum()
     day_pnl = day_fills['pnl'].sum()
 
     col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
-        st.metric("Total Trades", len(day_fills))
+        st.metric("📊 Total Volume", format_vol(total_volume))
     with col2:
-        st.metric("🟢 Open Long", open_long)
+        st.metric("🟢 Open Long", format_vol(open_long_vol))
     with col3:
-        st.metric("🔵 Close Long", close_long)
+        st.metric("🔵 Close Long", format_vol(close_long_vol))
     with col4:
-        st.metric("🔴 Open Short", open_short)
+        st.metric("🔴 Open Short", format_vol(open_short_vol))
     with col5:
-        st.metric("🟠 Close Short", close_short)
+        st.metric("🟠 Close Short", format_vol(close_short_vol))
 
     st.metric("💰 Day PnL", format_currency(day_pnl))
 
-    # Wallets with activity on this date
+    # Wallets with activity on this date - showing Volume
     if 'wallet' in day_fills.columns:
         st.markdown("### 👛 Wallets with Activity")
         wallet_summary = day_fills.groupby('wallet').agg({
             'coin': 'count',
+            'volume': 'sum',
             'pnl': 'sum',
             'direction': lambda x: list(x.value_counts().head(2).index)
         }).reset_index()
-        wallet_summary.columns = ['Wallet', 'Trades', 'PnL', 'Top Directions']
-        wallet_summary = wallet_summary.sort_values('Trades', ascending=False)
+        wallet_summary.columns = ['Wallet', 'Trades', 'Volume', 'PnL', 'Top Directions']
+        wallet_summary = wallet_summary.sort_values('Volume', ascending=False)
+        wallet_summary['Volume'] = wallet_summary['Volume'].apply(lambda x: format_vol(x))
         wallet_summary['PnL'] = wallet_summary['PnL'].apply(lambda x: format_currency(x))
         wallet_summary['Top Directions'] = wallet_summary['Top Directions'].apply(lambda x: ', '.join(x))
         st.dataframe(wallet_summary, hide_index=True, use_container_width=True)
 
-    # Trading pairs breakdown
+    # Trading pairs breakdown - with Volume
     st.markdown("### 🪙 Trading Pairs")
     coin_summary = day_fills.groupby('coin').agg({
         'direction': 'count',
+        'volume': 'sum',
         'pnl': 'sum',
         'size': 'sum'
     }).reset_index()
-    coin_summary.columns = ['Coin', 'Trades', 'PnL', 'Total Size']
-    coin_summary = coin_summary.sort_values('Trades', ascending=False)
+    coin_summary.columns = ['Coin', 'Trades', 'Volume', 'PnL', 'Total Size']
+    coin_summary = coin_summary.sort_values('Volume', ascending=False)
+    coin_summary['Volume'] = coin_summary['Volume'].apply(lambda x: format_vol(x))
     coin_summary['PnL'] = coin_summary['PnL'].apply(lambda x: format_currency(x))
     coin_summary['Total Size'] = coin_summary['Total Size'].apply(lambda x: f"{x:,.4f}")
     st.dataframe(coin_summary, hide_index=True, use_container_width=True)
 
-    # Detailed trades table
+    # Detailed trades table - with Volume column
     st.markdown("### 📜 All Trades")
     trades_display = day_fills.sort_values('timestamp', ascending=False).copy()
     trades_display['timestamp'] = trades_display['timestamp'].dt.strftime('%H:%M:%S')
+    trades_display['volume_display'] = trades_display['volume'].apply(lambda x: format_vol(x))
     trades_display['size'] = trades_display['size'].apply(lambda x: f"{x:,.4f}")
     trades_display['price'] = trades_display['price'].apply(lambda x: f"${x:,.2f}")
     trades_display['pnl'] = trades_display['pnl'].apply(lambda x: format_currency(x))
     trades_display['fee'] = trades_display['fee'].apply(lambda x: f"${x:,.4f}")
 
     if 'wallet' in trades_display.columns:
-        display_cols = ['timestamp', 'wallet', 'coin', 'direction', 'side', 'size', 'price', 'pnl', 'fee']
+        display_cols = ['timestamp', 'wallet', 'coin', 'direction', 'side', 'size', 'price', 'volume_display', 'pnl', 'fee']
         trades_display = trades_display[display_cols]
-        trades_display.columns = ['Time', 'Wallet', 'Coin', 'Direction', 'Side', 'Size', 'Price', 'PnL', 'Fee']
+        trades_display.columns = ['Time', 'Wallet', 'Coin', 'Direction', 'Side', 'Size', 'Price', 'Volume', 'PnL', 'Fee']
     else:
-        display_cols = ['timestamp', 'coin', 'direction', 'side', 'size', 'price', 'pnl', 'fee']
+        display_cols = ['timestamp', 'coin', 'direction', 'side', 'size', 'price', 'volume_display', 'pnl', 'fee']
         trades_display = trades_display[display_cols]
-        trades_display.columns = ['Time', 'Coin', 'Direction', 'Side', 'Size', 'Price', 'PnL', 'Fee']
+        trades_display.columns = ['Time', 'Coin', 'Direction', 'Side', 'Size', 'Price', 'Volume', 'PnL', 'Fee']
 
     st.dataframe(trades_display, hide_index=True, use_container_width=True, height=400)
 
@@ -655,6 +674,7 @@ def create_activity_calendar_range(fills_df: pd.DataFrame, from_date, to_date):
     """
     Create a single combined activity calendar heatmap for a date range.
     Shows only the selected date range with 4 trade types.
+    Colors are based on VOLUME (size × price), not trade count.
 
     Args:
         fills_df: DataFrame with trade fills
@@ -683,11 +703,11 @@ def create_activity_calendar_range(fills_df: pd.DataFrame, from_date, to_date):
     num_weeks = (total_days // 7) + 2
     num_days = 7
 
-    # Initialize 4 matrices for each trade type
-    open_long_matrix = np.zeros((num_days, num_weeks))
-    close_long_matrix = np.zeros((num_days, num_weeks))
-    open_short_matrix = np.zeros((num_days, num_weeks))
-    close_short_matrix = np.zeros((num_days, num_weeks))
+    # Initialize 4 matrices for each trade type - now storing VOLUME instead of count
+    open_long_volume = np.zeros((num_days, num_weeks))
+    close_long_volume = np.zeros((num_days, num_weeks))
+    open_short_volume = np.zeros((num_days, num_weeks))
+    close_short_volume = np.zeros((num_days, num_weeks))
 
     # Create date to coordinates mapping
     date_to_coords = {}
@@ -697,73 +717,104 @@ def create_activity_calendar_range(fills_df: pd.DataFrame, from_date, to_date):
         if week_of_range < num_weeks:
             date_to_coords[d.date()] = (day_of_week, week_of_range)
 
-    # Fill matrices from fills data
+    # Fill matrices from fills data with VOLUME (size × price)
     if len(fills_df) > 0:
         fills_df = fills_df.copy()
         fills_df['date'] = pd.to_datetime(fills_df['timestamp']).dt.date
+        fills_df['volume'] = fills_df['size'] * fills_df['price']
 
         for _, row in fills_df.iterrows():
             trade_date = row['date']
             if trade_date in date_to_coords:
                 day_idx, week_idx = date_to_coords[trade_date]
                 direction = row['direction']
+                trade_volume = row['volume']
                 if direction == 'Open Long':
-                    open_long_matrix[day_idx, week_idx] += 1
+                    open_long_volume[day_idx, week_idx] += trade_volume
                 elif direction == 'Close Long':
-                    close_long_matrix[day_idx, week_idx] += 1
+                    close_long_volume[day_idx, week_idx] += trade_volume
                 elif direction == 'Open Short':
-                    open_short_matrix[day_idx, week_idx] += 1
+                    open_short_volume[day_idx, week_idx] += trade_volume
                 elif direction == 'Close Short':
-                    close_short_matrix[day_idx, week_idx] += 1
+                    close_short_volume[day_idx, week_idx] += trade_volume
 
-    # Color scale for 4 trade types + no activity:
-    # 0.0-0.2: Open Short (Red #ef4444)
-    # 0.2-0.4: Close Short (Yellow #eab308)
-    # 0.4-0.6: No activity (Black #0a0a0a)
-    # 0.6-0.8: Close Long (Blue #3b82f6)
-    # 0.8-1.0: Open Long (Green #22c55e)
+    # Extended color scale for 4 trade types + no activity with STRONG and LIGHT variants:
+    # Strong colors (dominant > 50%) and Light colors (dominant <= 50%)
+    # 0.00-0.05: Open Short Light (#fca5a5)
+    # 0.05-0.10: Open Short Strong (#ef4444)
+    # 0.10-0.15: Close Short Light (#fde047)
+    # 0.15-0.20: Close Short Strong (#eab308)
+    # 0.20-0.30: No activity (Black #0a0a0a)
+    # 0.30-0.35: Close Long Light (#93c5fd)
+    # 0.35-0.40: Close Long Strong (#3b82f6)
+    # 0.40-0.45: Open Long Light (#86efac)
+    # 0.45-0.50: Open Long Strong (#22c55e)
     activity_colorscale = [
-        [0.0, "#ef4444"],   # Open Short - Red
-        [0.2, "#ef4444"],   # Open Short - Red
-        [0.2, "#eab308"],   # Close Short - Yellow
-        [0.4, "#eab308"],   # Close Short - Yellow
-        [0.4, "#0a0a0a"],   # No activity - Black
-        [0.6, "#0a0a0a"],   # No activity - Black
-        [0.6, "#3b82f6"],   # Close Long - Blue
-        [0.8, "#3b82f6"],   # Close Long - Blue
-        [0.8, "#22c55e"],   # Open Long - Green
-        [1.0, "#22c55e"]    # Open Long - Green
+        [0.00, "#fca5a5"],  # Open Short - Light Red
+        [0.10, "#fca5a5"],
+        [0.10, "#ef4444"],  # Open Short - Strong Red
+        [0.20, "#ef4444"],
+        [0.20, "#fde047"],  # Close Short - Light Yellow
+        [0.30, "#fde047"],
+        [0.30, "#eab308"],  # Close Short - Strong Yellow
+        [0.40, "#eab308"],
+        [0.40, "#0a0a0a"],  # No activity - Black
+        [0.50, "#0a0a0a"],
+        [0.50, "#93c5fd"],  # Close Long - Light Blue
+        [0.60, "#93c5fd"],
+        [0.60, "#3b82f6"],  # Close Long - Strong Blue
+        [0.70, "#3b82f6"],
+        [0.70, "#86efac"],  # Open Long - Light Green
+        [0.80, "#86efac"],
+        [0.80, "#22c55e"],  # Open Long - Strong Green
+        [1.00, "#22c55e"],
     ]
 
-    # Create display values based on dominant trade type
-    display_values = np.full((num_days, num_weeks), 0.5)  # Default: No activity (black)
+    # Create display values based on dominant trade type BY VOLUME
+    display_values = np.full((num_days, num_weeks), 0.45)  # Default: No activity (black)
+    # Store volume data for hover text
+    volume_data = {}
 
     for i in range(num_days):
         for j in range(num_weeks):
-            ol = open_long_matrix[i, j]
-            cl = close_long_matrix[i, j]
-            os = open_short_matrix[i, j]
-            cs = close_short_matrix[i, j]
-            total = ol + cl + os + cs
+            ol = open_long_volume[i, j]
+            cl = close_long_volume[i, j]
+            os = open_short_volume[i, j]
+            cs = close_short_volume[i, j]
+            total_volume = ol + cl + os + cs
 
-            if total == 0:
-                display_values[i, j] = 0.5  # No activity - Black
+            volume_data[(i, j)] = {'ol': ol, 'cl': cl, 'os': os, 'cs': cs, 'total': total_volume}
+
+            if total_volume == 0:
+                display_values[i, j] = 0.45  # No activity - Black
             else:
-                # Find dominant type and assign corresponding color value
-                max_count = max(ol, cl, os, cs)
-                if ol == max_count:
-                    display_values[i, j] = 0.9  # Open Long - Green
-                elif cl == max_count:
-                    display_values[i, j] = 0.7  # Close Long - Blue
-                elif cs == max_count:
-                    display_values[i, j] = 0.3  # Close Short - Yellow
-                else:  # os == max_count
-                    display_values[i, j] = 0.1  # Open Short - Red
+                # Find dominant type BY VOLUME and check if > 50%
+                max_volume = max(ol, cl, os, cs)
+                is_strong = (max_volume / total_volume) > 0.5
+
+                if ol == max_volume:
+                    display_values[i, j] = 0.90 if is_strong else 0.75  # Open Long
+                elif cl == max_volume:
+                    display_values[i, j] = 0.65 if is_strong else 0.55  # Close Long
+                elif cs == max_volume:
+                    display_values[i, j] = 0.35 if is_strong else 0.25  # Close Short
+                else:  # os == max_volume
+                    display_values[i, j] = 0.15 if is_strong else 0.05  # Open Short
 
     # Create hover text and customdata (dates) for click handling
     hover_text = []
     customdata = []  # Store dates for click events
     day_names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+
+    def format_volume(v):
+        """Format volume for display"""
+        if v >= 1_000_000:
+            return f"${v/1_000_000:.2f}M"
+        elif v >= 1_000:
+            return f"${v/1_000:.1f}K"
+        else:
+            return f"${v:.0f}"
+
     for day_idx in range(num_days):
         row_text = []
         row_dates = []
@@ -772,13 +823,11 @@ def create_activity_calendar_range(fills_df: pd.DataFrame, from_date, to_date):
                 date = start_date + timedelta(weeks=week_idx, days=day_idx)
                 if start_date <= date <= end_date:
                     row_dates.append(date.strftime('%Y-%m-%d'))
-                    ol = int(open_long_matrix[day_idx, week_idx])
-                    cl = int(close_long_matrix[day_idx, week_idx])
-                    os = int(open_short_matrix[day_idx, week_idx])
-                    cs = int(close_short_matrix[day_idx, week_idx])
-                    total = ol + cl + os + cs
-                    if total > 0:
-                        # Find dominant activity type
+                    vd = volume_data.get((day_idx, week_idx), {'ol': 0, 'cl': 0, 'os': 0, 'cs': 0, 'total': 0})
+                    ol, cl, os, cs, total_volume = vd['ol'], vd['cl'], vd['os'], vd['cs'], vd['total']
+
+                    if total_volume > 0:
+                        # Find dominant activity type by volume
                         activities = {
                             'Open Long': (ol, '🟢'),
                             'Close Long': (cl, '🔵'),
@@ -787,13 +836,17 @@ def create_activity_calendar_range(fills_df: pd.DataFrame, from_date, to_date):
                         }
                         dominant_type = max(activities.items(), key=lambda x: x[1][0])
                         dominant_name = dominant_type[0]
-                        dominant_count = dominant_type[1][0]
+                        dominant_volume = dominant_type[1][0]
                         dominant_emoji = dominant_type[1][1]
+                        dominant_pct = (dominant_volume / total_volume * 100) if total_volume > 0 else 0
+
+                        # Star marker for high volume days (> $10M)
+                        star_marker = "⭐ " if total_volume > 10_000_000 else ""
 
                         row_text.append(
-                            f"<b>{date.strftime('%Y-%m-%d')}</b><br>"
-                            f"{dominant_emoji} {dominant_name}: {dominant_count}<br>"
-                            f"<b>Total: {total}</b><br>"
+                            f"<b>{star_marker}{date.strftime('%Y-%m-%d')}</b><br>"
+                            f"{dominant_emoji} {dominant_name}: {format_volume(dominant_volume)} ({dominant_pct:.0f}%)<br>"
+                            f"<b>Total Volume: {format_volume(total_volume)}</b><br>"
                             f"<i>Click for details</i>"
                         )
                     else:
@@ -837,9 +890,25 @@ def create_activity_calendar_range(fills_df: pd.DataFrame, from_date, to_date):
         ygap=2,
     ))
 
+    # Add star marker annotations for high volume days (> $10M)
+    annotations = []
+    for day_idx in range(num_days):
+        for week_idx in range(num_weeks):
+            vd = volume_data.get((day_idx, week_idx), {'total': 0})
+            if vd['total'] > 10_000_000:
+                annotations.append(dict(
+                    x=week_idx,
+                    y=day_names[day_idx],
+                    text="⭐",
+                    showarrow=False,
+                    font=dict(size=10, color="white"),
+                    xanchor="center",
+                    yanchor="middle",
+                ))
+
     # Create title based on date range
     date_format = '%d/%m/%Y'
-    title_text = f"Trading Activity: {start_date.strftime(date_format)} - {end_date.strftime(date_format)} (Click a cell for details)"
+    title_text = f"Key Activity Calendar: {start_date.strftime(date_format)} - {end_date.strftime(date_format)} (Click a cell for details)"
 
     fig.update_layout(
         title=dict(text=title_text, font=dict(size=18, color=COLORS["text"]), x=0.5),
@@ -856,6 +925,7 @@ def create_activity_calendar_range(fills_df: pd.DataFrame, from_date, to_date):
             zeroline=False,
         ),
         yaxis=dict(showgrid=False, zeroline=False, autorange='reversed'),
+        annotations=annotations,
     )
 
     return fig
@@ -866,8 +936,12 @@ def create_all_wallets_heatmap(fills_df: pd.DataFrame, from_date=None, to_date=N
     Create a beautiful combined heatmap showing all wallets' activity for a date range.
     Y-axis: Wallet names
     X-axis: Days across the entire range
-    Color: Green (long), Red (short), Dark (no activity)
-    Hover: Shows dominant trade type per day
+    Color: Based on VOLUME dominant trade type for each wallet per day
+    - Green (Open Long) - Xanh lá
+    - Blue (Close Long) - Xanh dương
+    - Red (Open Short) - Đỏ
+    - Yellow (Close Short) - Cam
+    - Dark (No activity)
     """
     # Handle different input types for backwards compatibility
     if from_date is None:
@@ -897,9 +971,10 @@ def create_all_wallets_heatmap(fills_df: pd.DataFrame, from_date=None, to_date=N
         fills_df = fills_df.copy() if len(fills_df) > 0 else pd.DataFrame()
         if len(fills_df) > 0:
             fills_df['date'] = pd.to_datetime(fills_df['timestamp']).dt.date
-            wallet_counts = fills_df.groupby('wallet').size()
-            # Sort: wallets with activity first (by count desc), then wallets without activity
-            wallets_with_activity = wallet_counts.sort_values(ascending=False).index.tolist()
+            fills_df['volume'] = fills_df['size'] * fills_df['price']
+            wallet_volumes = fills_df.groupby('wallet')['volume'].sum()
+            # Sort: wallets with activity first (by volume desc), then wallets without activity
+            wallets_with_activity = wallet_volumes.sort_values(ascending=False).index.tolist()
             wallets_without_activity = [w for w in all_wallet_names if w not in wallets_with_activity]
             wallets = wallets_with_activity + wallets_without_activity
         else:
@@ -909,39 +984,45 @@ def create_all_wallets_heatmap(fills_df: pd.DataFrame, from_date=None, to_date=N
             return None
         fills_df = fills_df.copy()
         fills_df['date'] = pd.to_datetime(fills_df['timestamp']).dt.date
-        wallet_counts = fills_df.groupby('wallet').size().sort_values(ascending=False)
-        wallets = wallet_counts.index.tolist()
+        fills_df['volume'] = fills_df['size'] * fills_df['price']
+        wallet_volumes = fills_df.groupby('wallet')['volume'].sum().sort_values(ascending=False)
+        wallets = wallet_volumes.index.tolist()
 
     # Create matrix: wallets x days
     num_days_total = len(all_dates)
     num_wallets = len(wallets)
 
-    # Initialize 4 matrices for each trade type
-    open_long_matrix = np.zeros((num_wallets, num_days_total))
-    close_long_matrix = np.zeros((num_wallets, num_days_total))
-    open_short_matrix = np.zeros((num_wallets, num_days_total))
-    close_short_matrix = np.zeros((num_wallets, num_days_total))
+    # Initialize 4 matrices for each trade type - storing VOLUME
+    open_long_volume = np.zeros((num_wallets, num_days_total))
+    close_long_volume = np.zeros((num_wallets, num_days_total))
+    open_short_volume = np.zeros((num_wallets, num_days_total))
+    close_short_volume = np.zeros((num_wallets, num_days_total))
 
     # Create date to index mapping
     date_to_idx = {d.date(): i for i, d in enumerate(all_dates)}
 
-    # Fill matrices
-    for wallet_idx, wallet in enumerate(wallets):
-        wallet_fills = fills_df[fills_df['wallet'] == wallet]
+    # Fill matrices with VOLUME (size × price)
+    if len(fills_df) > 0 and 'volume' not in fills_df.columns:
+        fills_df['volume'] = fills_df['size'] * fills_df['price']
 
-        for _, row in wallet_fills.iterrows():
-            trade_date = row['date']
-            if trade_date in date_to_idx:
-                day_idx = date_to_idx[trade_date]
-                direction = row['direction']
-                if direction == 'Open Long':
-                    open_long_matrix[wallet_idx, day_idx] += 1
-                elif direction == 'Close Long':
-                    close_long_matrix[wallet_idx, day_idx] += 1
-                elif direction == 'Open Short':
-                    open_short_matrix[wallet_idx, day_idx] += 1
-                elif direction == 'Close Short':
-                    close_short_matrix[wallet_idx, day_idx] += 1
+    for wallet_idx, wallet in enumerate(wallets):
+        if len(fills_df) > 0:
+            wallet_fills = fills_df[fills_df['wallet'] == wallet]
+
+            for _, row in wallet_fills.iterrows():
+                trade_date = row['date']
+                if trade_date in date_to_idx:
+                    day_idx = date_to_idx[trade_date]
+                    direction = row['direction']
+                    trade_volume = row['volume']
+                    if direction == 'Open Long':
+                        open_long_volume[wallet_idx, day_idx] += trade_volume
+                    elif direction == 'Close Long':
+                        close_long_volume[wallet_idx, day_idx] += trade_volume
+                    elif direction == 'Open Short':
+                        open_short_volume[wallet_idx, day_idx] += trade_volume
+                    elif direction == 'Close Short':
+                        close_short_volume[wallet_idx, day_idx] += trade_volume
 
     # Color scale for 4 trade types + no activity:
     # 0.0-0.2: Open Short (Red #ef4444)
@@ -951,40 +1032,53 @@ def create_all_wallets_heatmap(fills_df: pd.DataFrame, from_date=None, to_date=N
     # 0.8-1.0: Open Long (Green #22c55e)
     activity_colorscale = [
         [0.0, "#ef4444"],   # Open Short - Red
-        [0.2, "#ef4444"],   # Open Short - Red
-        [0.2, "#eab308"],   # Close Short - Yellow
-        [0.4, "#eab308"],   # Close Short - Yellow
+        [0.2, "#ef4444"],
+        [0.2, "#eab308"],   # Close Short - Yellow/Orange
+        [0.4, "#eab308"],
         [0.4, "#0a0a0a"],   # No activity - Black
-        [0.6, "#0a0a0a"],   # No activity - Black
+        [0.6, "#0a0a0a"],
         [0.6, "#3b82f6"],   # Close Long - Blue
-        [0.8, "#3b82f6"],   # Close Long - Blue
+        [0.8, "#3b82f6"],
         [0.8, "#22c55e"],   # Open Long - Green
-        [1.0, "#22c55e"]    # Open Long - Green
+        [1.0, "#22c55e"]
     ]
 
-    # Create display values based on dominant trade type
+    # Create display values based on dominant trade type BY VOLUME for each wallet
     display_values = np.full((num_wallets, num_days_total), 0.5)  # Default: No activity (black)
+    # Store volume data for hover text
+    volume_data = {}
+
+    def format_volume(v):
+        """Format volume for display"""
+        if v >= 1_000_000:
+            return f"${v/1_000_000:.2f}M"
+        elif v >= 1_000:
+            return f"${v/1_000:.1f}K"
+        else:
+            return f"${v:.0f}"
 
     for i in range(num_wallets):
         for j in range(num_days_total):
-            ol = open_long_matrix[i, j]
-            cl = close_long_matrix[i, j]
-            os = open_short_matrix[i, j]
-            cs = close_short_matrix[i, j]
-            total = ol + cl + os + cs
+            ol = open_long_volume[i, j]
+            cl = close_long_volume[i, j]
+            os = open_short_volume[i, j]
+            cs = close_short_volume[i, j]
+            total_volume = ol + cl + os + cs
 
-            if total == 0:
+            volume_data[(i, j)] = {'ol': ol, 'cl': cl, 'os': os, 'cs': cs, 'total': total_volume}
+
+            if total_volume == 0:
                 display_values[i, j] = 0.5  # No activity - Black
             else:
-                # Find dominant type and assign corresponding color value
-                max_count = max(ol, cl, os, cs)
-                if ol == max_count:
+                # Find dominant type BY VOLUME for this wallet on this day
+                max_volume = max(ol, cl, os, cs)
+                if ol == max_volume:
                     display_values[i, j] = 0.9  # Open Long - Green
-                elif cl == max_count:
+                elif cl == max_volume:
                     display_values[i, j] = 0.7  # Close Long - Blue
-                elif cs == max_count:
-                    display_values[i, j] = 0.3  # Close Short - Yellow
-                else:  # os == max_count
+                elif cs == max_volume:
+                    display_values[i, j] = 0.3  # Close Short - Yellow/Orange
+                else:  # os == max_volume
                     display_values[i, j] = 0.1  # Open Short - Red
 
     # Create hover text and customdata for click handling
@@ -994,15 +1088,13 @@ def create_all_wallets_heatmap(fills_df: pd.DataFrame, from_date=None, to_date=N
         row_text = []
         row_data = []
         for day_idx, date in enumerate(all_dates):
-            ol = int(open_long_matrix[wallet_idx, day_idx])
-            cl = int(close_long_matrix[wallet_idx, day_idx])
-            os = int(open_short_matrix[wallet_idx, day_idx])
-            cs = int(close_short_matrix[wallet_idx, day_idx])
-            total = ol + cl + os + cs
+            vd = volume_data.get((wallet_idx, day_idx), {'ol': 0, 'cl': 0, 'os': 0, 'cs': 0, 'total': 0})
+            ol, cl, os, cs, total_volume = vd['ol'], vd['cl'], vd['os'], vd['cs'], vd['total']
+
             # Store date and wallet for click events
             row_data.append(f"{date.strftime('%Y-%m-%d')}|{wallet}")
-            if total > 0:
-                # Find dominant activity type
+            if total_volume > 0:
+                # Find dominant activity type by volume
                 activities = {
                     'Open Long': (ol, '🟢'),
                     'Close Long': (cl, '🔵'),
@@ -1011,14 +1103,15 @@ def create_all_wallets_heatmap(fills_df: pd.DataFrame, from_date=None, to_date=N
                 }
                 dominant_type = max(activities.items(), key=lambda x: x[1][0])
                 dominant_name = dominant_type[0]
-                dominant_count = dominant_type[1][0]
+                dominant_volume = dominant_type[1][0]
                 dominant_emoji = dominant_type[1][1]
+                dominant_pct = (dominant_volume / total_volume * 100) if total_volume > 0 else 0
 
                 row_text.append(
                     f"<b>{wallet[:25]}</b><br>"
                     f"<b>{date.strftime('%b %d, %Y')}</b><br>"
-                    f"{dominant_emoji} {dominant_name}: {dominant_count}<br>"
-                    f"<b>Total: {total}</b><br>"
+                    f"{dominant_emoji} {dominant_name}: {format_volume(dominant_volume)} ({dominant_pct:.0f}%)<br>"
+                    f"<b>Total Volume: {format_volume(total_volume)}</b><br>"
                     f"<i>Click for details</i>"
                 )
             else:
