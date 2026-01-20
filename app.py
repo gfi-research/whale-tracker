@@ -626,7 +626,7 @@ def render_whale_screener_content():
             }
 
         with ThreadPoolExecutor(max_workers=4) as executor:
-            futures = {executor.submit(fetch_portfolio, row): idx for idx, row in filtered_df.head(50).iterrows()}
+            futures = {executor.submit(fetch_portfolio, row): idx for idx, row in filtered_df.iterrows()}
 
             for i, future in enumerate(as_completed(futures)):
                 try:
