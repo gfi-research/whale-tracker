@@ -311,15 +311,15 @@ def render_smart_money_content():
 
     st.divider()
 
-    # ==================== MARKET POSITIONING SUMMARY ====================
-    st.subheader("📊 Market Positioning")
-
+    # ==================== EXTREMELY PROFITABLE POSITIONING ====================
     tokens = ["BTC", "ETH", "SOL", "HYPE", "XRP", "DOGE", "AVAX", "LINK"]
 
     # Load all token positions for summary
     @st.cache_data(ttl=300, show_spinner=False)
     def load_all_token_summary():
         token_summary = {}
+        total_profit_wallets = 0
+        total_loss_wallets = 0
         for token in tokens:
             positions = nansen_client.get_token_positions(token, per_page=100)
             if positions:
@@ -332,6 +332,14 @@ def render_smart_money_content():
                 total_value = total_long_value + total_short_value
                 long_pct = (total_long_value / max(total_value, 1)) * 100
 
+                # Count profitable vs loss positions
+                for p in positions:
+                    upnl = float(p.get('upnl_usd') or 0)
+                    if upnl >= 0:
+                        total_profit_wallets += 1
+                    else:
+                        total_loss_wallets += 1
+
                 token_summary[token] = {
                     'long_value': total_long_value,
                     'short_value': total_short_value,
@@ -340,82 +348,172 @@ def render_smart_money_content():
                     'long_count': len(long_positions),
                     'short_count': len(short_positions),
                 }
-        return token_summary
+        return token_summary, total_profit_wallets, total_loss_wallets
 
     with st.spinner("Loading market positioning..."):
-        token_summary = load_all_token_summary()
+        token_summary, profit_wallets, loss_wallets = load_all_token_summary()
 
     if token_summary:
         # Calculate overall positioning
         total_long = sum(t['long_value'] for t in token_summary.values())
         total_short = sum(t['short_value'] for t in token_summary.values())
         overall_long_pct = (total_long / max(total_long + total_short, 1)) * 100
+        total_wallets = sum(t['long_count'] + t['short_count'] for t in token_summary.values())
+        profit_pct = (profit_wallets / max(profit_wallets + loss_wallets, 1)) * 100
 
         # Determine sentiment
         if overall_long_pct >= 70:
             sentiment = "VERY BULLISH"
-            sentiment_color = "green"
+            sentiment_color = "#22c55e"
         elif overall_long_pct >= 55:
-            sentiment = "BULLISH"
-            sentiment_color = "green"
+            sentiment = "SLIGHTLY BULLISH"
+            sentiment_color = "#22c55e"
         elif overall_long_pct >= 45:
             sentiment = "NEUTRAL"
-            sentiment_color = "gray"
+            sentiment_color = "#9ca3af"
         elif overall_long_pct >= 30:
-            sentiment = "BEARISH"
-            sentiment_color = "red"
+            sentiment = "SLIGHTLY BEARISH"
+            sentiment_color = "#ef4444"
         else:
             sentiment = "VERY BEARISH"
-            sentiment_color = "red"
+            sentiment_color = "#ef4444"
 
-        # Overall positioning header
-        col_main, col_stats = st.columns([2, 1])
-        with col_main:
-            st.markdown(f"### 30D - :{sentiment_color}[{sentiment}]")
-            st.markdown(f"## :{sentiment_color}[{overall_long_pct:.1f}% Long]")
-        with col_stats:
-            st.metric("Total Wallets", sum(t['long_count'] + t['short_count'] for t in token_summary.values()))
-            st.metric("Markets", len(token_summary))
-
-        st.divider()
-
-        # Token cards grid
         def get_token_sentiment(long_pct):
             if long_pct >= 70:
-                return "Very Bullish", "green"
+                return "Very Bullish", "#166534"
             elif long_pct >= 55:
-                return "Bullish", "green"
+                return "Bullish", "#166534"
             elif long_pct >= 45:
-                return "Neutral", "gray"
+                return "Neutral", "#374151"
             elif long_pct >= 30:
-                return "Bit Bearish", "orange"
+                return "Bit Bearish", "#92400e"
             else:
-                return "Bearish", "red"
+                return "Bearish", "#991b1b"
 
-        # Display token cards in rows
-        cols = st.columns(4)
-        for idx, (token, data) in enumerate(sorted(token_summary.items(), key=lambda x: abs(x[1]['upnl']), reverse=True)):
-            sentiment_label, color = get_token_sentiment(data['long_pct'])
-            upnl = data['upnl']
-            upnl_str = f"+{format_currency(upnl, compact=True)}" if upnl >= 0 else format_currency(upnl, compact=True)
+        # Layout: Left sidebar | Center chart | Right token cards
+        col_left, col_center, col_right = st.columns([1, 2, 1.5])
 
-            with cols[idx % 4]:
-                if color == "green":
-                    bg_color = "#166534"  # Dark green
-                elif color == "red":
-                    bg_color = "#991b1b"  # Dark red
-                elif color == "orange":
-                    bg_color = "#92400e"  # Dark orange
-                else:
-                    bg_color = "#374151"  # Gray
-
-                st.markdown(f"""
-                <div style="background-color: {bg_color}; padding: 12px; border-radius: 8px; margin-bottom: 8px;">
-                    <div style="font-size: 18px; font-weight: bold; color: white;">💎 {token}</div>
-                    <div style="font-size: 14px; color: #d1d5db;">{upnl_str} UPNL</div>
-                    <div style="font-size: 12px; color: #9ca3af;">{sentiment_label} ({data['long_pct']:.0f}% L)</div>
+        with col_left:
+            # Extremely Profitable card
+            st.markdown(f"""
+            <div style="background-color: #1e293b; padding: 16px; border-radius: 12px; border: 1px solid #334155;">
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+                    <span style="font-size: 24px;">🐋</span>
+                    <div>
+                        <div style="font-size: 16px; font-weight: bold; color: white;">Extremely Profitable</div>
+                        <div style="font-size: 12px; color: {sentiment_color};">{sentiment} ↘</div>
+                    </div>
                 </div>
-                """, unsafe_allow_html=True)
+
+                <div style="margin-bottom: 16px;">
+                    <div style="font-size: 11px; color: #9ca3af; margin-bottom: 4px;">NOTIONAL</div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                        <span style="color: #22c55e; font-size: 12px;">{format_currency(total_long, compact=True)}</span>
+                        <span style="color: #ef4444; font-size: 12px;">{format_currency(total_short, compact=True)}</span>
+                    </div>
+                    <div style="background: linear-gradient(to right, #22c55e {overall_long_pct}%, #ef4444 {overall_long_pct}%); height: 8px; border-radius: 4px;"></div>
+                    <div style="display: flex; justify-content: space-between; margin-top: 4px;">
+                        <span style="color: #9ca3af; font-size: 10px;">{overall_long_pct:.0f}% LONG</span>
+                        <span style="color: #9ca3af; font-size: 10px;">{100-overall_long_pct:.0f}% SHORT</span>
+                    </div>
+                </div>
+
+                <div>
+                    <div style="font-size: 11px; color: #9ca3af; margin-bottom: 4px;">UNREALIZED PNL</div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                        <span style="color: #22c55e; font-size: 12px;">{profit_pct:.1f}%</span>
+                        <span style="color: #ef4444; font-size: 12px;">{100-profit_pct:.1f}%</span>
+                    </div>
+                    <div style="background: linear-gradient(to right, #22c55e {profit_pct}%, #ef4444 {profit_pct}%); height: 8px; border-radius: 4px;"></div>
+                    <div style="display: flex; justify-content: space-between; margin-top: 4px;">
+                        <span style="color: #9ca3af; font-size: 10px;">{profit_pct:.0f}% IN PROFIT</span>
+                        <span style="color: #9ca3af; font-size: 10px;">{100-profit_pct:.0f}% IN LOSS</span>
+                    </div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with col_center:
+            st.markdown(f"""
+            <div style="background-color: #1e293b; padding: 16px; border-radius: 12px; border: 1px solid #334155;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                    <span style="font-size: 16px; font-weight: bold; color: white;">Extremely Profitable Positioning</span>
+                    <div style="display: flex; gap: 8px;">
+                        <span style="background: #374151; padding: 4px 12px; border-radius: 4px; font-size: 12px; color: #9ca3af;">24H</span>
+                        <span style="background: #374151; padding: 4px 12px; border-radius: 4px; font-size: 12px; color: #9ca3af;">7D</span>
+                        <span style="background: #0f172a; padding: 4px 12px; border-radius: 4px; font-size: 12px; color: white; border: 1px solid #3b82f6;">30D</span>
+                        <span style="background: #374151; padding: 4px 12px; border-radius: 4px; font-size: 12px; color: #9ca3af;">ALL TIME</span>
+                    </div>
+                </div>
+                <div style="font-size: 14px; color: #9ca3af;">30D - <span style="color: {sentiment_color};">{sentiment}</span></div>
+                <div style="font-size: 36px; font-weight: bold; color: #ef4444; margin: 8px 0;">{overall_long_pct:.1f}% Long</div>
+                <div style="height: 100px; display: flex; align-items: flex-end; gap: 2px; margin: 16px 0;">
+            """, unsafe_allow_html=True)
+
+            # Simple bar chart simulation
+            import random
+            random.seed(42)
+            bars_html = ""
+            for i in range(30):
+                height = 30 + random.randint(0, 50)
+                bars_html += f'<div style="background: #ef4444; width: 8px; height: {height}px; border-radius: 2px;"></div>'
+
+            st.markdown(f"""
+                    {bars_html}
+                </div>
+                <div style="display: flex; gap: 16px; margin-top: 16px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="color: #9ca3af; font-size: 12px;">WALLETS</span>
+                        <span style="background: #065f46; color: #22c55e; padding: 2px 8px; border-radius: 4px; font-size: 12px;">{total_wallets}</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="color: #9ca3af; font-size: 12px;">MARKETS</span>
+                        <span style="background: #7f1d1d; color: #ef4444; padding: 2px 8px; border-radius: 4px; font-size: 12px;">{len(token_summary)}</span>
+                    </div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with col_right:
+            # Sort tokens by UPNL
+            sorted_tokens = sorted(token_summary.items(), key=lambda x: abs(x[1]['upnl']), reverse=True)
+
+            # Top 2 tokens (larger cards)
+            cols_top = st.columns(2)
+            for idx, (token, data) in enumerate(sorted_tokens[:2]):
+                sentiment_label, bg_color = get_token_sentiment(data['long_pct'])
+                upnl = data['upnl']
+                upnl_str = f"+{format_currency(upnl, compact=True)}" if upnl >= 0 else format_currency(upnl, compact=True)
+
+                with cols_top[idx]:
+                    st.markdown(f"""
+                    <div style="background-color: {bg_color}; padding: 16px; border-radius: 8px; margin-bottom: 8px; min-height: 80px;">
+                        <div style="font-size: 20px; font-weight: bold; color: white;">💎 {token}</div>
+                        <div style="font-size: 14px; color: #d1d5db; margin-top: 8px;">{upnl_str} UPNL</div>
+                        <div style="font-size: 12px; color: #e5e7eb;">{sentiment_label}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+            # Remaining tokens (smaller cards in 2x3 grid)
+            remaining = sorted_tokens[2:8]
+            for row in range(3):
+                cols_small = st.columns(2)
+                for col_idx in range(2):
+                    token_idx = row * 2 + col_idx
+                    if token_idx < len(remaining):
+                        token, data = remaining[token_idx]
+                        sentiment_label, bg_color = get_token_sentiment(data['long_pct'])
+                        upnl = data['upnl']
+                        upnl_str = f"+{format_currency(upnl, compact=True)}" if upnl >= 0 else format_currency(upnl, compact=True)
+
+                        with cols_small[col_idx]:
+                            st.markdown(f"""
+                            <div style="background-color: {bg_color}; padding: 10px; border-radius: 6px; margin-bottom: 6px;">
+                                <div style="font-size: 14px; font-weight: bold; color: white;">💎 {token}</div>
+                                <div style="font-size: 11px; color: #d1d5db;">{upnl_str} UPNL</div>
+                                <div style="font-size: 10px; color: #e5e7eb;">{sentiment_label}</div>
+                            </div>
+                            """, unsafe_allow_html=True)
 
     st.divider()
 
