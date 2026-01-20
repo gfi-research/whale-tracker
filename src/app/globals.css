@@ -1,0 +1,140 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 222 47% 8%;
+    --foreground: 210 40% 98%;
+
+    --card: 220 40% 12%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 220 40% 10%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 198 93% 59%;
+    --primary-foreground: 204 80% 15%;
+
+    --secondary: 220 40% 18%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 220 30% 20%;
+    --muted-foreground: 215 20% 65%;
+
+    --accent: 220 40% 15%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 85% 97%;
+
+    --border: 220 30% 18%;
+    --input: 220 30% 20%;
+    --ring: 198 93% 59%;
+
+    --radius: 0.5rem;
+
+    /* Sentiment colors */
+    --bullish: 142 76% 45%;
+    --bullish-foreground: 142 80% 95%;
+    --bearish: 0 84% 60%;
+    --bearish-foreground: 0 85% 97%;
+    --neutral: 220 20% 50%;
+    --neutral-foreground: 220 20% 95%;
+  }
+
+  .dark {
+    --background: 222 47% 8%;
+    --foreground: 210 40% 98%;
+
+    --card: 220 40% 12%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 220 40% 10%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 198 93% 59%;
+    --primary-foreground: 204 80% 15%;
+
+    --secondary: 220 40% 18%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 220 30% 20%;
+    --muted-foreground: 215 20% 65%;
+
+    --accent: 220 40% 15%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 85% 97%;
+
+    --border: 220 30% 18%;
+    --input: 220 30% 20%;
+    --ring: 198 93% 59%;
+
+    /* Sentiment colors */
+    --bullish: 142 76% 45%;
+    --bullish-foreground: 142 80% 95%;
+    --bearish: 0 84% 60%;
+    --bearish-foreground: 0 85% 97%;
+    --neutral: 220 20% 50%;
+    --neutral-foreground: 220 20% 95%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    margin: 0;
+    min-height: 100vh;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--muted));
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}
+
+/* Sentiment text colors */
+.text-bullish {
+  color: hsl(var(--bullish));
+}
+
+.text-bearish {
+  color: hsl(var(--bearish));
+}
+
+.text-neutral {
+  color: hsl(var(--neutral));
+}
+
+/* Sentiment background colors */
+.bg-bullish {
+  background-color: hsl(var(--bullish));
+}
+
+.bg-bearish {
+  background-color: hsl(var(--bearish));
+}
+
+.bg-neutral {
+  background-color: hsl(var(--neutral));
+}
