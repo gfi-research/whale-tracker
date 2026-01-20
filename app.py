@@ -311,6 +311,114 @@ def render_smart_money_content():
 
     st.divider()
 
+    # ==================== MARKET POSITIONING SUMMARY ====================
+    st.subheader("📊 Market Positioning")
+
+    tokens = ["BTC", "ETH", "SOL", "HYPE", "XRP", "DOGE", "AVAX", "LINK"]
+
+    # Load all token positions for summary
+    @st.cache_data(ttl=300, show_spinner=False)
+    def load_all_token_summary():
+        token_summary = {}
+        for token in tokens:
+            positions = nansen_client.get_token_positions(token, per_page=100)
+            if positions:
+                long_positions = [p for p in positions if p.get('side') == 'Long']
+                short_positions = [p for p in positions if p.get('side') == 'Short']
+                total_long_value = sum(float(p.get('position_value_usd') or 0) for p in long_positions)
+                total_short_value = sum(float(p.get('position_value_usd') or 0) for p in short_positions)
+                total_long_upnl = sum(float(p.get('upnl_usd') or 0) for p in long_positions)
+                total_short_upnl = sum(float(p.get('upnl_usd') or 0) for p in short_positions)
+                total_value = total_long_value + total_short_value
+                long_pct = (total_long_value / max(total_value, 1)) * 100
+
+                token_summary[token] = {
+                    'long_value': total_long_value,
+                    'short_value': total_short_value,
+                    'long_pct': long_pct,
+                    'upnl': total_long_upnl + total_short_upnl,
+                    'long_count': len(long_positions),
+                    'short_count': len(short_positions),
+                }
+        return token_summary
+
+    with st.spinner("Loading market positioning..."):
+        token_summary = load_all_token_summary()
+
+    if token_summary:
+        # Calculate overall positioning
+        total_long = sum(t['long_value'] for t in token_summary.values())
+        total_short = sum(t['short_value'] for t in token_summary.values())
+        overall_long_pct = (total_long / max(total_long + total_short, 1)) * 100
+
+        # Determine sentiment
+        if overall_long_pct >= 70:
+            sentiment = "VERY BULLISH"
+            sentiment_color = "green"
+        elif overall_long_pct >= 55:
+            sentiment = "BULLISH"
+            sentiment_color = "green"
+        elif overall_long_pct >= 45:
+            sentiment = "NEUTRAL"
+            sentiment_color = "gray"
+        elif overall_long_pct >= 30:
+            sentiment = "BEARISH"
+            sentiment_color = "red"
+        else:
+            sentiment = "VERY BEARISH"
+            sentiment_color = "red"
+
+        # Overall positioning header
+        col_main, col_stats = st.columns([2, 1])
+        with col_main:
+            st.markdown(f"### 30D - :{sentiment_color}[{sentiment}]")
+            st.markdown(f"## :{sentiment_color}[{overall_long_pct:.1f}% Long]")
+        with col_stats:
+            st.metric("Total Wallets", sum(t['long_count'] + t['short_count'] for t in token_summary.values()))
+            st.metric("Markets", len(token_summary))
+
+        st.divider()
+
+        # Token cards grid
+        def get_token_sentiment(long_pct):
+            if long_pct >= 70:
+                return "Very Bullish", "green"
+            elif long_pct >= 55:
+                return "Bullish", "green"
+            elif long_pct >= 45:
+                return "Neutral", "gray"
+            elif long_pct >= 30:
+                return "Bit Bearish", "orange"
+            else:
+                return "Bearish", "red"
+
+        # Display token cards in rows
+        cols = st.columns(4)
+        for idx, (token, data) in enumerate(sorted(token_summary.items(), key=lambda x: abs(x[1]['upnl']), reverse=True)):
+            sentiment_label, color = get_token_sentiment(data['long_pct'])
+            upnl = data['upnl']
+            upnl_str = f"+{format_currency(upnl, compact=True)}" if upnl >= 0 else format_currency(upnl, compact=True)
+
+            with cols[idx % 4]:
+                if color == "green":
+                    bg_color = "#166534"  # Dark green
+                elif color == "red":
+                    bg_color = "#991b1b"  # Dark red
+                elif color == "orange":
+                    bg_color = "#92400e"  # Dark orange
+                else:
+                    bg_color = "#374151"  # Gray
+
+                st.markdown(f"""
+                <div style="background-color: {bg_color}; padding: 12px; border-radius: 8px; margin-bottom: 8px;">
+                    <div style="font-size: 18px; font-weight: bold; color: white;">💎 {token}</div>
+                    <div style="font-size: 14px; color: #d1d5db;">{upnl_str} UPNL</div>
+                    <div style="font-size: 12px; color: #9ca3af;">{sentiment_label} ({data['long_pct']:.0f}% L)</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+    st.divider()
+
     # Tabs
     tab1, tab2 = st.tabs(["📊 Whale Leaderboard", "📈 Token Positions"])
 
