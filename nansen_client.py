@@ -6,9 +6,34 @@ import logging
 from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta
 from dataclasses import dataclass, field
-from dotenv import load_dotenv
 
-load_dotenv()
+try:
+    import streamlit as st
+    HAS_STREAMLIT = True
+except ImportError:
+    HAS_STREAMLIT = False
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
+
+def get_secret(key: str, default: str = "") -> str:
+    """Get secret from Streamlit secrets or environment variable."""
+    # Try Streamlit secrets first (for Streamlit Cloud)
+    if HAS_STREAMLIT:
+        try:
+            # Try nested format: [API_KEYS] section
+            if "API_KEYS" in st.secrets:
+                return st.secrets["API_KEYS"].get(key, default)
+            # Try flat format
+            return st.secrets.get(key, default)
+        except Exception:
+            pass
+    # Fall back to environment variable
+    return os.getenv(key, default)
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -66,7 +91,7 @@ class NansenClient:
     BASE_URL = "https://api.nansen.ai"
 
     def __init__(self, api_key: Optional[str] = None):
-        self.api_key = api_key or os.getenv("NANSEN_API_KEY", "")
+        self.api_key = api_key or get_secret("NANSEN_API_KEY", "")
         if not self.api_key:
             logger.warning("NANSEN_API_KEY not set - API calls will fail")
 
