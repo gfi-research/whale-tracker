@@ -216,6 +216,22 @@ def render_smart_money_sidebar():
 
     st.divider()
 
+    # Show whale data status
+    if st.session_state.get('whale_positions_loaded', False):
+        whale_count = len(st.session_state.get('whale_wallet_data', []))
+        st.success(f"✅ {whale_count} whales loaded")
+
+        if st.button("🔄 Refetch All Whales", type="secondary"):
+            st.session_state.whale_positions_loaded = False
+            st.session_state.whale_wallet_data = []
+            st.session_state.whale_all_positions = []
+            reset_usage_tracker()
+            st.rerun()
+    else:
+        st.warning("⏳ Whale data not loaded")
+
+    st.divider()
+
     col1, col2 = st.columns(2)
     with col1:
         if st.button("🔄 Reset"):
@@ -236,9 +252,8 @@ def render_smart_money_sidebar():
 
     st.divider()
     st.caption("Credit costs:")
-    st.caption("• Leaderboard: 5")
-    st.caption("• Wallet: 1")
-    st.caption("• Token: 5")
+    st.caption("• Wallet position: 1")
+    st.caption("• Full fetch (229): ~229")
 
 
 def render_smart_money_content():
@@ -246,54 +261,195 @@ def render_smart_money_content():
     st.title("💰 Smart Money on Hyper")
     st.caption("Track smart money positions on Hyperliquid | Powered by Nansen API")
 
-    # Load leaderboard
-    @st.cache_data(ttl=300, show_spinner=False)
-    def load_leaderboard_data(days: int = 30, min_value: float = 1_000_000):
-        date_to = datetime.now().strftime("%Y-%m-%d")
-        date_from = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
-        return nansen_client.get_perp_leaderboard(
-            date_from=date_from,
-            date_to=date_to,
-            min_account_value=min_value,
-            per_page=50
-        )
+    # Load wallet addresses from wallet_address.txt (229 wallets)
+    def load_whale_wallet_list():
+        """Load wallet list from wallet_address.txt"""
+        csv_path = Path(__file__).parent / "wallet_address.txt"
+        if csv_path.exists():
+            df = pd.read_csv(csv_path)
+            return df
+        return None
 
-    with st.spinner("Loading whale data from Nansen API..."):
-        leaderboard = load_leaderboard_data()
-
-    if not leaderboard:
-        st.error("Failed to load data from Nansen API. Check your API key.")
+    whale_list = load_whale_wallet_list()
+    if whale_list is None:
+        st.error("Failed to load wallet_address.txt")
         st.stop()
 
-    # Process data
-    wallet_data = []
-    for trader in leaderboard:
-        address = trader.get('trader_address', '')
-        label = trader.get('trader_address_label', truncate_address(address))
-        account_value = float(trader.get('account_value', 0))
-        total_pnl = float(trader.get('total_pnl', 0))
-        roi = float(trader.get('roi', 0))
+    # Fetch positions for all wallets from wallet_address.txt
+    @st.cache_data(ttl=600, show_spinner=False)
+    def fetch_all_whale_positions(_wallet_addresses: tuple):
+        """Fetch positions for all 229 wallets - costs 229 credits"""
+        all_wallet_data = []
+        all_positions = []
 
-        position_value = float(trader.get('position_value', 0))
-        leverage = float(trader.get('leverage', 0))
+        for address, label in _wallet_addresses:
+            position_data = nansen_client.get_wallet_positions(address)
 
-        if position_value == 0 and account_value > 0:
-            estimated_leverage = 2.5 + (hash(address) % 50) / 10
-            position_value = account_value * estimated_leverage
-            leverage = estimated_leverage
+            if position_data:
+                account_value = float(position_data.get('margin_summary_account_value_usd') or 0)
+                total_margin = float(position_data.get('margin_summary_total_margin_used_usd') or 0)
 
-        wallet_data.append({
-            'address': address,
-            'label': label,
-            'account_value': account_value,
-            'position_value': position_value,
-            'leverage': leverage,
-            'total_pnl': total_pnl,
-            'roi': roi,
-            'size_cohort': calculate_size_cohort(account_value),
-        })
+                asset_positions = position_data.get('asset_positions', [])
+                wallet_positions = []
+                wallet_upnl = 0
+                wallet_position_value = 0
 
-    wallet_df = pd.DataFrame(wallet_data)
+                for pos_data in asset_positions:
+                    pos = pos_data.get('position', {})
+                    token = pos.get('token_symbol', 'Unknown')
+                    size = float(pos.get('size') or 0)
+                    position_value = float(pos.get('position_value_usd') or 0)
+                    upnl = float(pos.get('unrealized_pnl_usd') or 0)
+                    leverage = float(pos.get('leverage_value') or 1)
+                    entry_price = float(pos.get('entry_price_usd') or 0)
+
+                    side = "Long" if size > 0 else "Short"
+
+                    wallet_positions.append({
+                        'token': token,
+                        'side': side,
+                        'size': abs(size),
+                        'position_value': position_value,
+                        'upnl': upnl,
+                        'leverage': leverage,
+                        'entry_price': entry_price,
+                    })
+
+                    all_positions.append({
+                        'address': address,
+                        'label': label,
+                        'token': token,
+                        'side': side,
+                        'position_value': position_value,
+                        'upnl': upnl,
+                    })
+
+                    wallet_upnl += upnl
+                    wallet_position_value += position_value
+
+                # Calculate wallet leverage
+                wallet_leverage = wallet_position_value / max(account_value, 1) if account_value > 0 else 0
+
+                all_wallet_data.append({
+                    'address': address,
+                    'label': label,
+                    'account_value': account_value,
+                    'position_value': wallet_position_value,
+                    'leverage': wallet_leverage,
+                    'total_pnl': wallet_upnl,
+                    'positions': wallet_positions,
+                    'position_count': len(wallet_positions),
+                })
+
+        return all_wallet_data, all_positions
+
+    # Convert to tuple for caching (list is not hashable)
+    wallet_addresses = tuple(
+        (row['trader_address'], row['trader_address_label'])
+        for _, row in whale_list.iterrows()
+    )
+
+    # Check if we need to fetch (button or first load)
+    if 'whale_positions_loaded' not in st.session_state:
+        st.session_state.whale_positions_loaded = False
+
+    # Show fetch button if not loaded
+    if not st.session_state.whale_positions_loaded:
+        st.warning(f"📊 Ready to fetch positions for **{len(wallet_addresses)} wallets** from wallet_address.txt")
+        st.caption(f"⚠️ This will cost approximately **{len(wallet_addresses)} credits** (1 credit per wallet)")
+
+        if st.button("🚀 Fetch All Whale Positions", type="primary"):
+            with st.spinner(f"Fetching positions for {len(wallet_addresses)} wallets... (this may take a while)"):
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+
+                # Fetch with progress tracking
+                all_wallet_data = []
+                all_positions = []
+
+                for idx, (address, label) in enumerate(wallet_addresses):
+                    position_data = nansen_client.get_wallet_positions(address)
+
+                    if position_data:
+                        account_value = float(position_data.get('margin_summary_account_value_usd') or 0)
+                        asset_positions = position_data.get('asset_positions', [])
+                        wallet_upnl = 0
+                        wallet_position_value = 0
+                        wallet_positions = []
+
+                        for pos_data in asset_positions:
+                            pos = pos_data.get('position', {})
+                            token = pos.get('token_symbol', 'Unknown')
+                            size = float(pos.get('size') or 0)
+                            position_value = float(pos.get('position_value_usd') or 0)
+                            upnl = float(pos.get('unrealized_pnl_usd') or 0)
+                            leverage = float(pos.get('leverage_value') or 1)
+
+                            side = "Long" if size > 0 else "Short"
+
+                            wallet_positions.append({
+                                'token': token,
+                                'side': side,
+                                'position_value': position_value,
+                                'upnl': upnl,
+                                'leverage': leverage,
+                            })
+
+                            all_positions.append({
+                                'address': address,
+                                'label': label,
+                                'token': token,
+                                'side': side,
+                                'position_value': position_value,
+                                'upnl': upnl,
+                            })
+
+                            wallet_upnl += upnl
+                            wallet_position_value += position_value
+
+                        wallet_leverage = wallet_position_value / max(account_value, 1) if account_value > 0 else 0
+
+                        all_wallet_data.append({
+                            'address': address,
+                            'label': label,
+                            'account_value': account_value,
+                            'position_value': wallet_position_value,
+                            'leverage': wallet_leverage,
+                            'total_pnl': wallet_upnl,
+                            'positions': wallet_positions,
+                            'position_count': len(wallet_positions),
+                        })
+
+                    progress_bar.progress((idx + 1) / len(wallet_addresses))
+                    status_text.text(f"Fetched {idx + 1}/{len(wallet_addresses)} wallets...")
+
+                progress_bar.empty()
+                status_text.empty()
+
+                st.session_state.whale_wallet_data = all_wallet_data
+                st.session_state.whale_all_positions = all_positions
+                st.session_state.whale_positions_loaded = True
+                st.rerun()
+
+        st.stop()
+
+    # Get cached data
+    all_wallet_data = st.session_state.get('whale_wallet_data', [])
+    all_positions = st.session_state.get('whale_all_positions', [])
+
+    if not all_wallet_data:
+        st.error("No wallet data loaded. Please fetch again.")
+        if st.button("🔄 Reset and Fetch Again"):
+            st.session_state.whale_positions_loaded = False
+            st.rerun()
+        st.stop()
+
+    # Create DataFrame from fetched data
+    wallet_df = pd.DataFrame(all_wallet_data)
+
+    # Add size cohort and ROI
+    wallet_df['size_cohort'] = wallet_df['account_value'].apply(calculate_size_cohort)
+    wallet_df['roi'] = (wallet_df['total_pnl'] / wallet_df['account_value'].replace(0, 1) * 100).round(2)
 
     # Summary metrics
     col1, col2, col3, col4 = st.columns(4)
@@ -312,53 +468,50 @@ def render_smart_money_content():
     st.divider()
 
     # ==================== EXTREMELY PROFITABLE POSITIONING ====================
-    tokens = ["BTC", "ETH", "SOL", "HYPE", "XRP", "DOGE", "AVAX", "LINK"]
+    # Calculate from REAL data (all_positions from 229 wallets)
 
-    # Load all token positions for summary
-    @st.cache_data(ttl=300, show_spinner=False)
-    def load_all_token_summary():
+    token_summary = {}
+    profit_wallets = 0
+    loss_wallets = 0
+
+    if all_positions:
+        positions_df = pd.DataFrame(all_positions)
+
+        # Calculate token summary from real data
         token_summary = {}
-        total_profit_wallets = 0
-        total_loss_wallets = 0
-        for token in tokens:
-            positions = nansen_client.get_token_positions(token, per_page=100)
-            if positions:
-                long_positions = [p for p in positions if p.get('side') == 'Long']
-                short_positions = [p for p in positions if p.get('side') == 'Short']
-                total_long_value = sum(float(p.get('position_value_usd') or 0) for p in long_positions)
-                total_short_value = sum(float(p.get('position_value_usd') or 0) for p in short_positions)
-                total_long_upnl = sum(float(p.get('upnl_usd') or 0) for p in long_positions)
-                total_short_upnl = sum(float(p.get('upnl_usd') or 0) for p in short_positions)
-                total_value = total_long_value + total_short_value
-                long_pct = (total_long_value / max(total_value, 1)) * 100
+        for token in positions_df['token'].unique():
+            token_positions = positions_df[positions_df['token'] == token]
+            long_positions = token_positions[token_positions['side'] == 'Long']
+            short_positions = token_positions[token_positions['side'] == 'Short']
 
-                # Count profitable vs loss positions
-                for p in positions:
-                    upnl = float(p.get('upnl_usd') or 0)
-                    if upnl >= 0:
-                        total_profit_wallets += 1
-                    else:
-                        total_loss_wallets += 1
+            total_long_value = long_positions['position_value'].sum()
+            total_short_value = short_positions['position_value'].sum()
+            total_long_upnl = long_positions['upnl'].sum()
+            total_short_upnl = short_positions['upnl'].sum()
+            total_value = total_long_value + total_short_value
+            long_pct = (total_long_value / max(total_value, 1)) * 100
 
-                token_summary[token] = {
-                    'long_value': total_long_value,
-                    'short_value': total_short_value,
-                    'long_pct': long_pct,
-                    'upnl': total_long_upnl + total_short_upnl,
-                    'long_count': len(long_positions),
-                    'short_count': len(short_positions),
-                }
-        return token_summary, total_profit_wallets, total_loss_wallets
+            token_summary[token] = {
+                'long_value': total_long_value,
+                'short_value': total_short_value,
+                'long_pct': long_pct,
+                'upnl': total_long_upnl + total_short_upnl,
+                'long_count': len(long_positions),
+                'short_count': len(short_positions),
+            }
 
-    with st.spinner("Loading market positioning..."):
-        token_summary, profit_wallets, loss_wallets = load_all_token_summary()
+        # Count wallets in profit vs loss (by wallet, not by position)
+        wallet_pnl = wallet_df.groupby('address')['total_pnl'].sum() if 'address' in wallet_df.columns else wallet_df['total_pnl']
+        profit_wallets = len(wallet_df[wallet_df['total_pnl'] > 0])
+        loss_wallets = len(wallet_df[wallet_df['total_pnl'] <= 0])
 
     if token_summary:
         # Calculate overall positioning
         total_long = sum(t['long_value'] for t in token_summary.values())
         total_short = sum(t['short_value'] for t in token_summary.values())
         overall_long_pct = (total_long / max(total_long + total_short, 1)) * 100
-        total_wallets = sum(t['long_count'] + t['short_count'] for t in token_summary.values())
+        # Use actual wallet count from wallet_df (229 wallets from wallet_address.txt)
+        total_wallets = len(wallet_df)
         profit_pct = (profit_wallets / max(profit_wallets + loss_wallets, 1)) * 100
 
         # Determine sentiment
@@ -394,126 +547,79 @@ def render_smart_money_content():
         col_left, col_center, col_right = st.columns([1, 2, 1.5])
 
         with col_left:
-            # Extremely Profitable card
-            st.markdown(f"""
-            <div style="background-color: #1e293b; padding: 16px; border-radius: 12px; border: 1px solid #334155;">
-                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
-                    <span style="font-size: 24px;">🐋</span>
-                    <div>
-                        <div style="font-size: 16px; font-weight: bold; color: white;">Extremely Profitable</div>
-                        <div style="font-size: 12px; color: {sentiment_color};">{sentiment} ↘</div>
-                    </div>
-                </div>
+            # Extremely Profitable card - using native Streamlit
+            st.markdown("### 🐋 Extremely Profitable")
+            if overall_long_pct >= 50:
+                st.markdown(f":green[{sentiment}] ↗")
+            else:
+                st.markdown(f":red[{sentiment}] ↘")
 
-                <div style="margin-bottom: 16px;">
-                    <div style="font-size: 11px; color: #9ca3af; margin-bottom: 4px;">NOTIONAL</div>
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                        <span style="color: #22c55e; font-size: 12px;">{format_currency(total_long, compact=True)}</span>
-                        <span style="color: #ef4444; font-size: 12px;">{format_currency(total_short, compact=True)}</span>
-                    </div>
-                    <div style="background: linear-gradient(to right, #22c55e {overall_long_pct}%, #ef4444 {overall_long_pct}%); height: 8px; border-radius: 4px;"></div>
-                    <div style="display: flex; justify-content: space-between; margin-top: 4px;">
-                        <span style="color: #9ca3af; font-size: 10px;">{overall_long_pct:.0f}% LONG</span>
-                        <span style="color: #9ca3af; font-size: 10px;">{100-overall_long_pct:.0f}% SHORT</span>
-                    </div>
-                </div>
+            st.caption("NOTIONAL")
+            notional_cols = st.columns(2)
+            with notional_cols[0]:
+                st.markdown(f":green[{format_currency(total_long, compact=True)}]")
+            with notional_cols[1]:
+                st.markdown(f":red[{format_currency(total_short, compact=True)}]")
+            st.progress(overall_long_pct / 100)
+            st.caption(f"{overall_long_pct:.0f}% LONG | {100-overall_long_pct:.0f}% SHORT")
 
-                <div>
-                    <div style="font-size: 11px; color: #9ca3af; margin-bottom: 4px;">UNREALIZED PNL</div>
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                        <span style="color: #22c55e; font-size: 12px;">{profit_pct:.1f}%</span>
-                        <span style="color: #ef4444; font-size: 12px;">{100-profit_pct:.1f}%</span>
-                    </div>
-                    <div style="background: linear-gradient(to right, #22c55e {profit_pct}%, #ef4444 {profit_pct}%); height: 8px; border-radius: 4px;"></div>
-                    <div style="display: flex; justify-content: space-between; margin-top: 4px;">
-                        <span style="color: #9ca3af; font-size: 10px;">{profit_pct:.0f}% IN PROFIT</span>
-                        <span style="color: #9ca3af; font-size: 10px;">{100-profit_pct:.0f}% IN LOSS</span>
-                    </div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+            st.caption("UNREALIZED PNL")
+            pnl_cols = st.columns(2)
+            with pnl_cols[0]:
+                st.markdown(f":green[{profit_pct:.1f}%]")
+            with pnl_cols[1]:
+                st.markdown(f":red[{100-profit_pct:.1f}%]")
+            st.progress(profit_pct / 100)
+            st.caption(f"{profit_pct:.0f}% IN PROFIT | {100-profit_pct:.0f}% IN LOSS")
 
         with col_center:
-            st.markdown(f"""
-            <div style="background-color: #1e293b; padding: 16px; border-radius: 12px; border: 1px solid #334155;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                    <span style="font-size: 16px; font-weight: bold; color: white;">Extremely Profitable Positioning</span>
-                    <div style="display: flex; gap: 8px;">
-                        <span style="background: #374151; padding: 4px 12px; border-radius: 4px; font-size: 12px; color: #9ca3af;">24H</span>
-                        <span style="background: #374151; padding: 4px 12px; border-radius: 4px; font-size: 12px; color: #9ca3af;">7D</span>
-                        <span style="background: #0f172a; padding: 4px 12px; border-radius: 4px; font-size: 12px; color: white; border: 1px solid #3b82f6;">30D</span>
-                        <span style="background: #374151; padding: 4px 12px; border-radius: 4px; font-size: 12px; color: #9ca3af;">ALL TIME</span>
-                    </div>
-                </div>
-                <div style="font-size: 14px; color: #9ca3af;">30D - <span style="color: {sentiment_color};">{sentiment}</span></div>
-                <div style="font-size: 36px; font-weight: bold; color: #ef4444; margin: 8px 0;">{overall_long_pct:.1f}% Long</div>
-                <div style="height: 100px; display: flex; align-items: flex-end; gap: 2px; margin: 16px 0;">
-            """, unsafe_allow_html=True)
+            st.markdown("### Extremely Profitable Positioning")
+            st.caption(f"Current positions - {sentiment}")
+            if overall_long_pct >= 50:
+                st.markdown(f"## :green[{overall_long_pct:.1f}% Long]")
+            else:
+                st.markdown(f"## :red[{overall_long_pct:.1f}% Long]")
 
-            # Simple bar chart simulation
-            import random
-            random.seed(42)
-            bars_html = ""
-            for i in range(30):
-                height = 30 + random.randint(0, 50)
-                bars_html += f'<div style="background: #ef4444; width: 8px; height: {height}px; border-radius: 2px;"></div>'
-
-            st.markdown(f"""
-                    {bars_html}
-                </div>
-                <div style="display: flex; gap: 16px; margin-top: 16px;">
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <span style="color: #9ca3af; font-size: 12px;">WALLETS</span>
-                        <span style="background: #065f46; color: #22c55e; padding: 2px 8px; border-radius: 4px; font-size: 12px;">{total_wallets}</span>
-                    </div>
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <span style="color: #9ca3af; font-size: 12px;">MARKETS</span>
-                        <span style="background: #7f1d1d; color: #ef4444; padding: 2px 8px; border-radius: 4px; font-size: 12px;">{len(token_summary)}</span>
-                    </div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+            # Stats
+            stat_cols = st.columns(2)
+            with stat_cols[0]:
+                st.metric("WALLETS", total_wallets)
+            with stat_cols[1]:
+                st.metric("MARKETS", len(token_summary))
 
         with col_right:
             # Sort tokens by UPNL
             sorted_tokens = sorted(token_summary.items(), key=lambda x: abs(x[1]['upnl']), reverse=True)
 
-            # Top 2 tokens (larger cards)
-            cols_top = st.columns(2)
-            for idx, (token, data) in enumerate(sorted_tokens[:2]):
+            # Display all tokens in grid
+            for idx, (token, data) in enumerate(sorted_tokens[:8]):
                 sentiment_label, bg_color = get_token_sentiment(data['long_pct'])
                 upnl = data['upnl']
                 upnl_str = f"+{format_currency(upnl, compact=True)}" if upnl >= 0 else format_currency(upnl, compact=True)
 
-                with cols_top[idx]:
-                    st.markdown(f"""
-                    <div style="background-color: {bg_color}; padding: 16px; border-radius: 8px; margin-bottom: 8px; min-height: 80px;">
-                        <div style="font-size: 20px; font-weight: bold; color: white;">💎 {token}</div>
-                        <div style="font-size: 14px; color: #d1d5db; margin-top: 8px;">{upnl_str} UPNL</div>
-                        <div style="font-size: 12px; color: #e5e7eb;">{sentiment_label}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-
-            # Remaining tokens (smaller cards in 2x3 grid)
-            remaining = sorted_tokens[2:8]
-            for row in range(3):
-                cols_small = st.columns(2)
-                for col_idx in range(2):
-                    token_idx = row * 2 + col_idx
-                    if token_idx < len(remaining):
-                        token, data = remaining[token_idx]
-                        sentiment_label, bg_color = get_token_sentiment(data['long_pct'])
-                        upnl = data['upnl']
-                        upnl_str = f"+{format_currency(upnl, compact=True)}" if upnl >= 0 else format_currency(upnl, compact=True)
-
-                        with cols_small[col_idx]:
-                            st.markdown(f"""
-                            <div style="background-color: {bg_color}; padding: 10px; border-radius: 6px; margin-bottom: 6px;">
-                                <div style="font-size: 14px; font-weight: bold; color: white;">💎 {token}</div>
-                                <div style="font-size: 11px; color: #d1d5db;">{upnl_str} UPNL</div>
-                                <div style="font-size: 10px; color: #e5e7eb;">{sentiment_label}</div>
-                            </div>
-                            """, unsafe_allow_html=True)
+                if idx < 2:
+                    # Larger cards for top 2
+                    if idx == 0:
+                        top_cols = st.columns(2)
+                    with top_cols[idx]:
+                        if data['long_pct'] >= 50:
+                            st.success(f"**💎 {token}**\n\n{upnl_str} UPNL\n\n{sentiment_label}")
+                        else:
+                            st.error(f"**💎 {token}**\n\n{upnl_str} UPNL\n\n{sentiment_label}")
+                else:
+                    # Smaller cards for rest
+                    if idx == 2 or idx == 4 or idx == 6:
+                        small_cols = st.columns(2)
+                    col_idx = (idx - 2) % 2
+                    with small_cols[col_idx]:
+                        if data['long_pct'] >= 50:
+                            st.success(f"💎 **{token}** | {upnl_str} | {sentiment_label}")
+                        elif data['long_pct'] >= 40:
+                            st.warning(f"💎 **{token}** | {upnl_str} | {sentiment_label}")
+                        else:
+                            st.error(f"💎 **{token}** | {upnl_str} | {sentiment_label}")
+    else:
+        st.info("📊 No open positions found. Wallets may not have any active perp positions.")
 
     st.divider()
 
@@ -521,7 +627,7 @@ def render_smart_money_content():
     tab1, tab2 = st.tabs(["📊 Whale Leaderboard", "📈 Token Positions"])
 
     with tab1:
-        st.subheader("Top Whale Traders (30 Days)")
+        st.subheader(f"Whale Traders ({len(wallet_df)} wallets from wallet_address.txt)")
         st.caption("Click 👁️ to view real-time positions")
 
         for idx, row in wallet_df.iterrows():
