@@ -2042,6 +2042,94 @@ def render_whale_screener_content():
                 with col4:
                     st.metric("🟠 Close Short", f"{close_short:,}")
 
+                # ==================== LINE CHART: Long/Short Volume ====================
+                st.divider()
+                st.markdown("### 📈 Long/Short Volume Over Time")
+
+                # Prepare data for line chart
+                chart_df = fills_df.copy()
+                chart_df['date'] = pd.to_datetime(chart_df['timestamp']).dt.date
+                chart_df['volume'] = chart_df['size'] * chart_df['price']
+
+                # Coin selector for chart
+                available_coins = sorted(chart_df['coin'].unique().tolist())
+                top_coins = chart_df.groupby('coin')['volume'].sum().nlargest(5).index.tolist()
+
+                col_coin, col_agg = st.columns([2, 1])
+                with col_coin:
+                    chart_coin = st.selectbox(
+                        "Select Coin",
+                        options=["All Coins"] + available_coins,
+                        index=0 if "BTC" not in available_coins else available_coins.index("BTC") + 1,
+                        key="volume_chart_coin"
+                    )
+                with col_agg:
+                    agg_type = st.radio("Aggregation", ["Daily", "Weekly"], horizontal=True, key="volume_agg_type")
+
+                # Filter by coin
+                if chart_coin != "All Coins":
+                    coin_df = chart_df[chart_df['coin'] == chart_coin]
+                else:
+                    coin_df = chart_df
+
+                if len(coin_df) > 0:
+                    # Aggregate by date
+                    coin_df['is_long'] = coin_df['direction'].isin(['Open Long', 'Close Long'])
+
+                    if agg_type == "Weekly":
+                        coin_df['period'] = pd.to_datetime(coin_df['date']).dt.to_period('W').dt.start_time
+                    else:
+                        coin_df['period'] = pd.to_datetime(coin_df['date'])
+
+                    # Calculate Long and Short volumes
+                    long_vol = coin_df[coin_df['is_long']].groupby('period')['volume'].sum()
+                    short_vol = coin_df[~coin_df['is_long']].groupby('period')['volume'].sum()
+
+                    # Create DataFrame for chart
+                    volume_chart_data = pd.DataFrame({
+                        'Long Volume': long_vol,
+                        'Short Volume': short_vol
+                    }).fillna(0)
+
+                    if len(volume_chart_data) > 0:
+                        # Display line chart
+                        st.line_chart(
+                            volume_chart_data,
+                            color=["#22c55e", "#ef4444"],
+                            use_container_width=True
+                        )
+
+                        # Summary for selected coin
+                        total_long = volume_chart_data['Long Volume'].sum()
+                        total_short = volume_chart_data['Short Volume'].sum()
+                        net_volume = total_long - total_short
+                        long_pct = (total_long / (total_long + total_short) * 100) if (total_long + total_short) > 0 else 0
+
+                        def fmt_vol(v):
+                            if abs(v) >= 1e9:
+                                return f"${v/1e9:.2f}B"
+                            elif abs(v) >= 1e6:
+                                return f"${v/1e6:.2f}M"
+                            elif abs(v) >= 1e3:
+                                return f"${v/1e3:.1f}K"
+                            return f"${v:.0f}"
+
+                        col1, col2, col3, col4 = st.columns(4)
+                        with col1:
+                            st.metric("🟢 Total Long", fmt_vol(total_long))
+                        with col2:
+                            st.metric("🔴 Total Short", fmt_vol(total_short))
+                        with col3:
+                            net_color = "🟢" if net_volume >= 0 else "🔴"
+                            st.metric(f"{net_color} Net Volume", fmt_vol(net_volume))
+                        with col4:
+                            bias = "LONG" if long_pct > 55 else ("SHORT" if long_pct < 45 else "NEUTRAL")
+                            st.metric("📊 Long %", f"{long_pct:.1f}% ({bias})")
+                    else:
+                        st.info(f"No volume data for {chart_coin}")
+                else:
+                    st.info(f"No trades found for {chart_coin}")
+
                 # Show all wallets heatmap if in all mode
                 is_all_mode = st.session_state.get("activity_mode", "single") == "all"
                 if is_all_mode and 'wallet' in fills_df.columns:
