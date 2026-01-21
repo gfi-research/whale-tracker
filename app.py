@@ -695,7 +695,12 @@ def render_smart_money_content():
                     del st.session_state[k]
                 st.rerun()
 
-        tokens = ["BTC", "ETH", "SOL", "ARB", "DOGE", "AVAX", "LINK", "OP", "APT", "SUI"]
+        # Get tokens from token_summary (sorted by UPNL), fallback to default list
+        if token_summary:
+            # Sort by absolute UPNL value (highest first)
+            tokens = sorted(token_summary.keys(), key=lambda t: abs(token_summary[t]['upnl']), reverse=True)
+        else:
+            tokens = ["BTC", "ETH", "SOL", "ARB", "DOGE", "AVAX", "LINK", "OP", "APT", "SUI"]
 
         for token in tokens:
             cache_key = f"token_positions_{token}"
