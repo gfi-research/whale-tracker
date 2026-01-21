@@ -717,6 +717,24 @@ def render_smart_money_content():
                 bias_icon = "🟢" if ratio > 55 else "🔴" if ratio < 45 else "⚪"
                 cache_icon = "📦" if is_cached else ""
                 title = f"{token} | {format_currency(total_value, compact=True)} | {bias_icon} L:{ratio:.0f}% {cache_icon}"
+            elif token in token_summary:
+                # Use token_summary data to show UPNL and sentiment
+                ts = token_summary[token]
+                upnl = ts['upnl']
+                long_pct = ts['long_pct']
+                # Determine sentiment based on long_pct
+                if long_pct >= 70:
+                    sentiment = "Very Bullish"
+                elif long_pct >= 55:
+                    sentiment = "Bullish"
+                elif long_pct >= 45:
+                    sentiment = "Neutral"
+                elif long_pct >= 30:
+                    sentiment = "Bit Bearish"
+                else:
+                    sentiment = "Bearish"
+                upnl_str = f"+{format_currency(upnl, compact=True)}" if upnl >= 0 else format_currency(upnl, compact=True)
+                title = f"💎 {token} | {upnl_str} UPNL | {sentiment}"
             else:
                 title = f"{token} | Click to load"
 
