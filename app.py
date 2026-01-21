@@ -1144,11 +1144,13 @@ def create_activity_calendar_range(fills_df: pd.DataFrame, from_date, to_date):
     close_short_volume = np.zeros((num_days, num_weeks))
 
     date_to_coords = {}
+    coords_to_date = {}  # Reverse mapping for hover text
     for d in all_dates:
         day_of_week = d.dayofweek
         week_of_range = (d - start_date).days // 7
         if week_of_range < num_weeks:
             date_to_coords[d.date()] = (day_of_week, week_of_range)
+            coords_to_date[(day_of_week, week_of_range)] = d.date()
 
     if len(fills_df) > 0:
         fills_df = fills_df.copy()
@@ -1223,26 +1225,25 @@ def create_activity_calendar_range(fills_df: pd.DataFrame, from_date, to_date):
     for day_idx in range(num_days):
         row_text = []
         for week_idx in range(num_weeks):
-            try:
-                date = start_date + timedelta(weeks=week_idx, days=day_idx)
-                if start_date <= date <= end_date:
-                    vd = volume_data.get((day_idx, week_idx), {'ol': 0, 'cl': 0, 'os': 0, 'cs': 0, 'total': 0})
-                    ol, cl, os, cs, total_volume = vd['ol'], vd['cl'], vd['os'], vd['cs'], vd['total']
+            # Use the reverse mapping to get the correct date
+            date_key = (day_idx, week_idx)
+            if date_key in coords_to_date:
+                date = coords_to_date[date_key]
+                vd = volume_data.get((day_idx, week_idx), {'ol': 0, 'cl': 0, 'os': 0, 'cs': 0, 'total': 0})
+                ol, cl, os, cs, total_volume = vd['ol'], vd['cl'], vd['os'], vd['cs'], vd['total']
 
-                    if total_volume > 0:
-                        activities = {'Open Long': (ol, '🟢'), 'Close Long': (cl, '🔵'), 'Open Short': (os, '🔴'), 'Close Short': (cs, '🟠')}
-                        dominant_type = max(activities.items(), key=lambda x: x[1][0])
-                        dominant_name = dominant_type[0]
-                        dominant_volume = dominant_type[1][0]
-                        dominant_emoji = dominant_type[1][1]
-                        dominant_pct = (dominant_volume / total_volume * 100) if total_volume > 0 else 0
-                        star_marker = "⭐ " if total_volume > 10_000_000 else ""
-                        row_text.append(f"<b>{star_marker}{date.strftime('%Y-%m-%d')}</b><br>{dominant_emoji} {dominant_name}: {format_volume(dominant_volume)} ({dominant_pct:.0f}%)<br><b>Total Volume: {format_volume(total_volume)}</b>")
-                    else:
-                        row_text.append(f"{date.strftime('%Y-%m-%d')}<br>No activity")
+                if total_volume > 0:
+                    activities = {'Open Long': (ol, '🟢'), 'Close Long': (cl, '🔵'), 'Open Short': (os, '🔴'), 'Close Short': (cs, '🟠')}
+                    dominant_type = max(activities.items(), key=lambda x: x[1][0])
+                    dominant_name = dominant_type[0]
+                    dominant_volume = dominant_type[1][0]
+                    dominant_emoji = dominant_type[1][1]
+                    dominant_pct = (dominant_volume / total_volume * 100) if total_volume > 0 else 0
+                    star_marker = "⭐ " if total_volume > 10_000_000 else ""
+                    row_text.append(f"<b>{star_marker}{date.strftime('%Y-%m-%d')}</b><br>{dominant_emoji} {dominant_name}: {format_volume(dominant_volume)} ({dominant_pct:.0f}%)<br><b>Total Volume: {format_volume(total_volume)}</b>")
                 else:
-                    row_text.append("")
-            except:
+                    row_text.append(f"{date.strftime('%Y-%m-%d')}<br>No activity")
+            else:
                 row_text.append("")
         hover_text.append(row_text)
 
