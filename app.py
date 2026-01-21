@@ -8,6 +8,7 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 from pathlib import Path
+import time
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -34,6 +35,15 @@ COLORS = {
     "green": "#22c55e",
     "red": "#ef4444",
 }
+
+# Heatmap color scale
+HEATMAP_COLORSCALE = [
+    [0, "#1a2845"],
+    [0.25, "#1e3a5f"],
+    [0.5, "#3bb5d3"],
+    [0.75, "#7dd3fc"],
+    [1, "#e2e8f0"]
+]
 
 # Page config
 st.set_page_config(
@@ -871,6 +881,737 @@ def create_screening_chart(df: pd.DataFrame, metric: str = "value", height: int 
     return fig
 
 
+def create_value_perp_heatmap(df: pd.DataFrame):
+    """Create heatmap: Account Value (X) vs Perp % (Y)"""
+    value_bins = [0, 1e6, 5e6, 10e6, 50e6, 100e6, float('inf')]
+    value_labels = ['<$1M', '$1-5M', '$5-10M', '$10-50M', '$50-100M', '>$100M']
+
+    perp_bins = [0, 20, 40, 60, 80, 100.1]
+    perp_labels = ['0-20%', '20-40%', '40-60%', '60-80%', '80-100%']
+
+    df['value_bin'] = pd.cut(df['total_value'], bins=value_bins, labels=value_labels)
+    df['perp_bin'] = pd.cut(df['perp_pct'], bins=perp_bins, labels=perp_labels)
+
+    heatmap_data = df.groupby(['perp_bin', 'value_bin'], observed=True).size().unstack(fill_value=0)
+    heatmap_data = heatmap_data.reindex(index=perp_labels, columns=value_labels, fill_value=0)
+
+    fig = go.Figure(data=go.Heatmap(
+        z=heatmap_data.values,
+        x=value_labels,
+        y=perp_labels,
+        colorscale=HEATMAP_COLORSCALE,
+        hovertemplate="Value: %{x}<br>Perp %: %{y}<br>Wallets: %{z}<extra></extra>",
+        text=heatmap_data.values,
+        texttemplate="%{text}",
+        textfont={"size": 14, "color": "white"},
+    ))
+
+    fig.update_layout(
+        title=dict(text="Distribution: Account Value vs Perp Allocation", font=dict(size=18, color=COLORS["text"]), x=0.5),
+        xaxis_title="Account Value",
+        yaxis_title="Perp Allocation %",
+        height=400,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="Inter, sans-serif", color=COLORS["text"]),
+        xaxis=dict(tickfont=dict(size=11)),
+        yaxis=dict(tickfont=dict(size=11), autorange="reversed"),
+    )
+    return fig
+
+
+def create_entity_perp_heatmap(df: pd.DataFrame):
+    """Create heatmap: Entity Type (X) vs Perp % (Y), color = Total AUM"""
+    perp_bins = [0, 20, 40, 60, 80, 100.1]
+    perp_labels = ['0-20%', '20-40%', '40-60%', '60-80%', '80-100%']
+
+    df['perp_bin'] = pd.cut(df['perp_pct'], bins=perp_bins, labels=perp_labels)
+    heatmap_data = df.groupby(['perp_bin', 'entity'], observed=True)['total_value'].sum().unstack(fill_value=0)
+    entities = df['entity'].unique().tolist()
+    heatmap_data = heatmap_data.reindex(index=perp_labels, columns=sorted(entities), fill_value=0)
+
+    display_text = (heatmap_data / 1e6).round(1).astype(str) + 'M'
+    display_text = display_text.replace('0.0M', '-')
+
+    fig = go.Figure(data=go.Heatmap(
+        z=heatmap_data.values,
+        x=sorted(entities),
+        y=perp_labels,
+        colorscale=HEATMAP_COLORSCALE,
+        hovertemplate="Entity: %{x}<br>Perp %: %{y}<br>AUM: $%{z:,.0f}<extra></extra>",
+        text=display_text.values,
+        texttemplate="%{text}",
+        textfont={"size": 14, "color": "white"},
+    ))
+
+    fig.update_layout(
+        title=dict(text="Distribution: Entity Type vs Perp Allocation (AUM)", font=dict(size=18, color=COLORS["text"]), x=0.5),
+        xaxis_title="Entity Type",
+        yaxis_title="Perp Allocation %",
+        height=400,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="Inter, sans-serif", color=COLORS["text"]),
+        xaxis=dict(tickfont=dict(size=12)),
+        yaxis=dict(tickfont=dict(size=11), autorange="reversed"),
+    )
+    return fig
+
+
+def create_value_pnl_heatmap(df: pd.DataFrame):
+    """Create heatmap: Account Value (X) vs PnL (Y)"""
+    value_bins = [0, 1e6, 5e6, 10e6, 50e6, 100e6, float('inf')]
+    value_labels = ['<$1M', '$1-5M', '$5-10M', '$10-50M', '$50-100M', '>$100M']
+
+    pnl_bins = [-float('inf'), -1e6, -100e3, 0, 100e3, 1e6, 10e6, float('inf')]
+    pnl_labels = ['<-$1M', '-$1M to -$100K', '-$100K to $0', '$0 to $100K', '$100K to $1M', '$1M to $10M', '>$10M']
+
+    df['value_bin'] = pd.cut(df['total_value'], bins=value_bins, labels=value_labels)
+    df['pnl_bin'] = pd.cut(df['total_pnl'], bins=pnl_bins, labels=pnl_labels)
+
+    heatmap_data = df.groupby(['pnl_bin', 'value_bin'], observed=True).size().unstack(fill_value=0)
+    heatmap_data = heatmap_data.reindex(index=pnl_labels, columns=value_labels, fill_value=0)
+
+    fig = go.Figure(data=go.Heatmap(
+        z=heatmap_data.values,
+        x=value_labels,
+        y=pnl_labels,
+        colorscale=HEATMAP_COLORSCALE,
+        hovertemplate="Value: %{x}<br>PnL: %{y}<br>Wallets: %{z}<extra></extra>",
+        text=heatmap_data.values,
+        texttemplate="%{text}",
+        textfont={"size": 14, "color": "white"},
+    ))
+
+    fig.update_layout(
+        title=dict(text="Distribution: Account Value vs PnL", font=dict(size=18, color=COLORS["text"]), x=0.5),
+        xaxis_title="Account Value",
+        yaxis_title="PnL Range",
+        height=450,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="Inter, sans-serif", color=COLORS["text"]),
+        xaxis=dict(tickfont=dict(size=11)),
+        yaxis=dict(tickfont=dict(size=10), autorange="reversed"),
+    )
+    return fig
+
+
+def create_histogram(df: pd.DataFrame, column: str, title: str, bins: int = 20):
+    """Create a histogram for distribution analysis."""
+    fig = go.Figure(data=go.Histogram(
+        x=df[column],
+        nbinsx=bins,
+        marker=dict(color=COLORS["perp"], line=dict(color=COLORS["spot"], width=1)),
+        hovertemplate=f"{title}: %{{x}}<br>Count: %{{y}}<extra></extra>",
+    ))
+
+    fig.update_layout(
+        title=dict(text=f"Distribution of {title}", font=dict(size=16, color=COLORS["text"]), x=0.5),
+        xaxis_title=title,
+        yaxis_title="Number of Wallets",
+        height=300,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="Inter, sans-serif", color=COLORS["text"]),
+        xaxis=dict(showgrid=True, gridcolor=COLORS["grid"]),
+        yaxis=dict(showgrid=True, gridcolor=COLORS["grid"]),
+        bargap=0.1,
+    )
+    return fig
+
+
+def create_activity_legend():
+    """Create legend for activity calendar with 4 trade types."""
+    return """
+    <div style="display: flex; align-items: center; gap: 15px; margin: 10px 0; flex-wrap: wrap;">
+        <span style="color: #22c55e;">🟢 Open Long</span>
+        <span style="color: #3b82f6;">🔵 Close Long</span>
+        <span style="color: #ef4444;">🔴 Open Short</span>
+        <span style="color: #eab308;">🟠 Close Short</span>
+        <span style="color: #6b7280;">⬛ No activity</span>
+    </div>
+    """
+
+
+def render_date_details_popup(fills_df: pd.DataFrame, selected_date: str):
+    """Render popup showing detailed transaction info for a specific date."""
+    if fills_df is None or len(fills_df) == 0:
+        st.warning(f"No data available for {selected_date}")
+        return
+
+    fills_df = fills_df.copy()
+    fills_df['date'] = pd.to_datetime(fills_df['timestamp']).dt.date
+    fills_df['volume'] = fills_df['size'] * fills_df['price']
+    selected_date_obj = pd.to_datetime(selected_date).date()
+    day_fills = fills_df[fills_df['date'] == selected_date_obj]
+
+    if len(day_fills) == 0:
+        st.info(f"📅 **{selected_date}** - No trades on this date")
+        return
+
+    total_volume = day_fills['volume'].sum()
+
+    def format_vol(v):
+        if v >= 1_000_000:
+            return f"${v/1_000_000:.2f}M"
+        elif v >= 1_000:
+            return f"${v/1_000:.1f}K"
+        else:
+            return f"${v:.0f}"
+
+    st.markdown(f"""
+    <div style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border-radius: 12px; padding: 20px; margin-bottom: 16px; border: 1px solid #3b82f6;">
+        <h3 style="margin: 0; color: #f1f5f9; font-size: 20px;">📅 Transaction Details: {selected_date}</h3>
+        <p style="margin: 8px 0 0 0; color: #94a3b8; font-size: 14px;">{len(day_fills)} trades | Total Volume: {format_vol(total_volume)}</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    open_long_vol = day_fills[day_fills['direction'] == 'Open Long']['volume'].sum()
+    close_long_vol = day_fills[day_fills['direction'] == 'Close Long']['volume'].sum()
+    open_short_vol = day_fills[day_fills['direction'] == 'Open Short']['volume'].sum()
+    close_short_vol = day_fills[day_fills['direction'] == 'Close Short']['volume'].sum()
+    day_pnl = day_fills['pnl'].sum()
+
+    col1, col2, col3, col4, col5 = st.columns(5)
+    with col1:
+        st.metric("📊 Total Volume", format_vol(total_volume))
+    with col2:
+        st.metric("🟢 Open Long", format_vol(open_long_vol))
+    with col3:
+        st.metric("🔵 Close Long", format_vol(close_long_vol))
+    with col4:
+        st.metric("🔴 Open Short", format_vol(open_short_vol))
+    with col5:
+        st.metric("🟠 Close Short", format_vol(close_short_vol))
+
+    st.metric("💰 Day PnL", hl_format_currency(day_pnl))
+
+    if 'wallet' in day_fills.columns:
+        st.markdown("### 👛 Wallets with Activity")
+        wallet_summary = day_fills.groupby('wallet').agg({
+            'coin': 'count',
+            'volume': 'sum',
+            'pnl': 'sum',
+            'direction': lambda x: list(x.value_counts().head(2).index)
+        }).reset_index()
+        wallet_summary.columns = ['Wallet', 'Trades', 'Volume', 'PnL', 'Top Directions']
+        wallet_summary = wallet_summary.sort_values('Volume', ascending=False)
+        wallet_summary['Volume'] = wallet_summary['Volume'].apply(lambda x: format_vol(x))
+        wallet_summary['PnL'] = wallet_summary['PnL'].apply(lambda x: hl_format_currency(x))
+        wallet_summary['Top Directions'] = wallet_summary['Top Directions'].apply(lambda x: ', '.join(x))
+        st.dataframe(wallet_summary, hide_index=True, use_container_width=True)
+
+    st.markdown("### 🪙 Trading Pairs")
+    coin_summary = day_fills.groupby('coin').agg({
+        'direction': 'count',
+        'volume': 'sum',
+        'pnl': 'sum',
+        'size': 'sum'
+    }).reset_index()
+    coin_summary.columns = ['Coin', 'Trades', 'Volume', 'PnL', 'Total Size']
+    coin_summary = coin_summary.sort_values('Volume', ascending=False)
+    coin_summary['Volume'] = coin_summary['Volume'].apply(lambda x: format_vol(x))
+    coin_summary['PnL'] = coin_summary['PnL'].apply(lambda x: hl_format_currency(x))
+    coin_summary['Total Size'] = coin_summary['Total Size'].apply(lambda x: f"{x:,.4f}")
+    st.dataframe(coin_summary, hide_index=True, use_container_width=True)
+
+
+def create_activity_calendar_range(fills_df: pd.DataFrame, from_date, to_date):
+    """Create a single combined activity calendar heatmap for a date range."""
+    if isinstance(from_date, int):
+        start_date = datetime(from_date, 1, 1)
+    elif hasattr(from_date, 'year'):
+        start_date = datetime(from_date.year, from_date.month, from_date.day)
+    else:
+        start_date = from_date
+
+    if isinstance(to_date, int):
+        end_date = datetime(to_date, 12, 31)
+    elif hasattr(to_date, 'year'):
+        end_date = datetime(to_date.year, to_date.month, to_date.day)
+    else:
+        end_date = to_date
+
+    all_dates = pd.date_range(start=start_date, end=end_date, freq='D')
+    total_days = (end_date - start_date).days + 1
+    num_weeks = (total_days // 7) + 2
+    num_days = 7
+
+    open_long_volume = np.zeros((num_days, num_weeks))
+    close_long_volume = np.zeros((num_days, num_weeks))
+    open_short_volume = np.zeros((num_days, num_weeks))
+    close_short_volume = np.zeros((num_days, num_weeks))
+
+    date_to_coords = {}
+    for d in all_dates:
+        day_of_week = d.dayofweek
+        week_of_range = (d - start_date).days // 7
+        if week_of_range < num_weeks:
+            date_to_coords[d.date()] = (day_of_week, week_of_range)
+
+    if len(fills_df) > 0:
+        fills_df = fills_df.copy()
+        fills_df['date'] = pd.to_datetime(fills_df['timestamp']).dt.date
+        fills_df['volume'] = fills_df['size'] * fills_df['price']
+
+        for _, row in fills_df.iterrows():
+            trade_date = row['date']
+            if trade_date in date_to_coords:
+                day_idx, week_idx = date_to_coords[trade_date]
+                direction = row['direction']
+                trade_volume = row['volume']
+                if direction == 'Open Long':
+                    open_long_volume[day_idx, week_idx] += trade_volume
+                elif direction == 'Close Long':
+                    close_long_volume[day_idx, week_idx] += trade_volume
+                elif direction == 'Open Short':
+                    open_short_volume[day_idx, week_idx] += trade_volume
+                elif direction == 'Close Short':
+                    close_short_volume[day_idx, week_idx] += trade_volume
+
+    activity_colorscale = [
+        [0.00, "#fca5a5"], [0.10, "#fca5a5"],
+        [0.10, "#ef4444"], [0.20, "#ef4444"],
+        [0.20, "#fde047"], [0.30, "#fde047"],
+        [0.30, "#eab308"], [0.40, "#eab308"],
+        [0.40, "#0a0a0a"], [0.50, "#0a0a0a"],
+        [0.50, "#93c5fd"], [0.60, "#93c5fd"],
+        [0.60, "#3b82f6"], [0.70, "#3b82f6"],
+        [0.70, "#86efac"], [0.80, "#86efac"],
+        [0.80, "#22c55e"], [1.00, "#22c55e"],
+    ]
+
+    display_values = np.full((num_days, num_weeks), 0.45)
+    volume_data = {}
+
+    for i in range(num_days):
+        for j in range(num_weeks):
+            ol = open_long_volume[i, j]
+            cl = close_long_volume[i, j]
+            os = open_short_volume[i, j]
+            cs = close_short_volume[i, j]
+            total_volume = ol + cl + os + cs
+
+            volume_data[(i, j)] = {'ol': ol, 'cl': cl, 'os': os, 'cs': cs, 'total': total_volume}
+
+            if total_volume == 0:
+                display_values[i, j] = 0.45
+            else:
+                max_volume = max(ol, cl, os, cs)
+                is_strong = (max_volume / total_volume) > 0.5
+                if ol == max_volume:
+                    display_values[i, j] = 0.90 if is_strong else 0.75
+                elif cl == max_volume:
+                    display_values[i, j] = 0.65 if is_strong else 0.55
+                elif cs == max_volume:
+                    display_values[i, j] = 0.35 if is_strong else 0.25
+                else:
+                    display_values[i, j] = 0.15 if is_strong else 0.05
+
+    hover_text = []
+    day_names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+
+    def format_volume(v):
+        if v >= 1_000_000:
+            return f"${v/1_000_000:.2f}M"
+        elif v >= 1_000:
+            return f"${v/1_000:.1f}K"
+        else:
+            return f"${v:.0f}"
+
+    for day_idx in range(num_days):
+        row_text = []
+        for week_idx in range(num_weeks):
+            try:
+                date = start_date + timedelta(weeks=week_idx, days=day_idx)
+                if start_date <= date <= end_date:
+                    vd = volume_data.get((day_idx, week_idx), {'ol': 0, 'cl': 0, 'os': 0, 'cs': 0, 'total': 0})
+                    ol, cl, os, cs, total_volume = vd['ol'], vd['cl'], vd['os'], vd['cs'], vd['total']
+
+                    if total_volume > 0:
+                        activities = {'Open Long': (ol, '🟢'), 'Close Long': (cl, '🔵'), 'Open Short': (os, '🔴'), 'Close Short': (cs, '🟠')}
+                        dominant_type = max(activities.items(), key=lambda x: x[1][0])
+                        dominant_name = dominant_type[0]
+                        dominant_volume = dominant_type[1][0]
+                        dominant_emoji = dominant_type[1][1]
+                        dominant_pct = (dominant_volume / total_volume * 100) if total_volume > 0 else 0
+                        star_marker = "⭐ " if total_volume > 10_000_000 else ""
+                        row_text.append(f"<b>{star_marker}{date.strftime('%Y-%m-%d')}</b><br>{dominant_emoji} {dominant_name}: {format_volume(dominant_volume)} ({dominant_pct:.0f}%)<br><b>Total Volume: {format_volume(total_volume)}</b>")
+                    else:
+                        row_text.append(f"{date.strftime('%Y-%m-%d')}<br>No activity")
+                else:
+                    row_text.append("")
+            except:
+                row_text.append("")
+        hover_text.append(row_text)
+
+    month_labels = []
+    month_positions = []
+    from_year = start_date.year
+    to_year = end_date.year
+    for year in range(from_year, to_year + 1):
+        for m in range(1, 13):
+            try:
+                first_day = datetime(year, m, 1)
+                if start_date <= first_day <= end_date:
+                    week_pos = (first_day - start_date).days // 7
+                    label = f"{first_day.strftime('%b')}" if from_year == to_year else f"{first_day.strftime('%b %Y')}"
+                    month_labels.append(label)
+                    month_positions.append(week_pos)
+            except:
+                pass
+
+    fig = go.Figure(data=go.Heatmap(
+        z=display_values,
+        x=list(range(num_weeks)),
+        y=day_names,
+        colorscale=activity_colorscale,
+        showscale=False,
+        hoverinfo='text',
+        text=hover_text,
+        xgap=2,
+        ygap=2,
+    ))
+
+    date_format = '%d/%m/%Y'
+    title_text = f"Key Activity Calendar: {start_date.strftime(date_format)} - {end_date.strftime(date_format)}"
+
+    fig.update_layout(
+        title=dict(text=title_text, font=dict(size=18, color=COLORS["text"]), x=0.5),
+        height=250,
+        margin=dict(l=50, r=20, t=60, b=50),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="Inter, sans-serif", color=COLORS["text"]),
+        xaxis=dict(tickmode='array', tickvals=month_positions, ticktext=month_labels, showgrid=False, zeroline=False),
+        yaxis=dict(showgrid=False, zeroline=False, autorange='reversed'),
+    )
+    return fig
+
+
+def create_all_wallets_heatmap(fills_df: pd.DataFrame, from_date=None, to_date=None, all_wallet_names: list = None):
+    """Create a combined heatmap showing all wallets' activity for a date range."""
+    if from_date is None:
+        start_date = datetime(datetime.now().year, 1, 1)
+    elif isinstance(from_date, int):
+        start_date = datetime(from_date, 1, 1)
+    elif hasattr(from_date, 'year'):
+        start_date = datetime(from_date.year, from_date.month, from_date.day)
+    else:
+        start_date = from_date
+
+    if to_date is None:
+        end_date = datetime.now()
+    elif isinstance(to_date, int):
+        end_date = datetime(to_date, 12, 31)
+    elif hasattr(to_date, 'year'):
+        end_date = datetime(to_date.year, to_date.month, to_date.day)
+    else:
+        end_date = to_date
+
+    all_dates = pd.date_range(start=start_date, end=end_date, freq='D')
+
+    if all_wallet_names is not None:
+        fills_df = fills_df.copy() if len(fills_df) > 0 else pd.DataFrame()
+        if len(fills_df) > 0:
+            fills_df['date'] = pd.to_datetime(fills_df['timestamp']).dt.date
+            fills_df['volume'] = fills_df['size'] * fills_df['price']
+            wallet_volumes = fills_df.groupby('wallet')['volume'].sum()
+            wallets_with_activity = wallet_volumes.sort_values(ascending=False).index.tolist()
+            wallets_without_activity = [w for w in all_wallet_names if w not in wallets_with_activity]
+            wallets = wallets_with_activity + wallets_without_activity
+        else:
+            wallets = all_wallet_names
+    else:
+        if len(fills_df) == 0 or 'wallet' not in fills_df.columns:
+            return None
+        fills_df = fills_df.copy()
+        fills_df['date'] = pd.to_datetime(fills_df['timestamp']).dt.date
+        fills_df['volume'] = fills_df['size'] * fills_df['price']
+        wallet_volumes = fills_df.groupby('wallet')['volume'].sum().sort_values(ascending=False)
+        wallets = wallet_volumes.index.tolist()
+
+    num_days_total = len(all_dates)
+    num_wallets = len(wallets)
+
+    open_long_volume = np.zeros((num_wallets, num_days_total))
+    close_long_volume = np.zeros((num_wallets, num_days_total))
+    open_short_volume = np.zeros((num_wallets, num_days_total))
+    close_short_volume = np.zeros((num_wallets, num_days_total))
+
+    date_to_idx = {d.date(): i for i, d in enumerate(all_dates)}
+
+    if len(fills_df) > 0 and 'volume' not in fills_df.columns:
+        fills_df['volume'] = fills_df['size'] * fills_df['price']
+
+    for wallet_idx, wallet in enumerate(wallets):
+        if len(fills_df) > 0:
+            wallet_fills = fills_df[fills_df['wallet'] == wallet]
+            for _, row in wallet_fills.iterrows():
+                trade_date = row['date']
+                if trade_date in date_to_idx:
+                    day_idx = date_to_idx[trade_date]
+                    direction = row['direction']
+                    trade_volume = row['volume']
+                    if direction == 'Open Long':
+                        open_long_volume[wallet_idx, day_idx] += trade_volume
+                    elif direction == 'Close Long':
+                        close_long_volume[wallet_idx, day_idx] += trade_volume
+                    elif direction == 'Open Short':
+                        open_short_volume[wallet_idx, day_idx] += trade_volume
+                    elif direction == 'Close Short':
+                        close_short_volume[wallet_idx, day_idx] += trade_volume
+
+    activity_colorscale = [
+        [0.0, "#ef4444"], [0.2, "#ef4444"],
+        [0.2, "#eab308"], [0.4, "#eab308"],
+        [0.4, "#0a0a0a"], [0.6, "#0a0a0a"],
+        [0.6, "#3b82f6"], [0.8, "#3b82f6"],
+        [0.8, "#22c55e"], [1.0, "#22c55e"]
+    ]
+
+    display_values = np.full((num_wallets, num_days_total), 0.5)
+    volume_data = {}
+
+    def format_volume(v):
+        if v >= 1_000_000:
+            return f"${v/1_000_000:.2f}M"
+        elif v >= 1_000:
+            return f"${v/1_000:.1f}K"
+        else:
+            return f"${v:.0f}"
+
+    for i in range(num_wallets):
+        for j in range(num_days_total):
+            ol = open_long_volume[i, j]
+            cl = close_long_volume[i, j]
+            os = open_short_volume[i, j]
+            cs = close_short_volume[i, j]
+            total_volume = ol + cl + os + cs
+
+            volume_data[(i, j)] = {'ol': ol, 'cl': cl, 'os': os, 'cs': cs, 'total': total_volume}
+
+            if total_volume == 0:
+                display_values[i, j] = 0.5
+            else:
+                max_volume = max(ol, cl, os, cs)
+                if ol == max_volume:
+                    display_values[i, j] = 0.9
+                elif cl == max_volume:
+                    display_values[i, j] = 0.7
+                elif cs == max_volume:
+                    display_values[i, j] = 0.3
+                else:
+                    display_values[i, j] = 0.1
+
+    hover_text = []
+    for wallet_idx, wallet in enumerate(wallets):
+        row_text = []
+        for day_idx, date in enumerate(all_dates):
+            vd = volume_data.get((wallet_idx, day_idx), {'ol': 0, 'cl': 0, 'os': 0, 'cs': 0, 'total': 0})
+            ol, cl, os, cs, total_volume = vd['ol'], vd['cl'], vd['os'], vd['cs'], vd['total']
+
+            if total_volume > 0:
+                activities = {'Open Long': (ol, '🟢'), 'Close Long': (cl, '🔵'), 'Open Short': (os, '🔴'), 'Close Short': (cs, '🟠')}
+                dominant_type = max(activities.items(), key=lambda x: x[1][0])
+                dominant_name = dominant_type[0]
+                dominant_volume = dominant_type[1][0]
+                dominant_emoji = dominant_type[1][1]
+                dominant_pct = (dominant_volume / total_volume * 100) if total_volume > 0 else 0
+                row_text.append(f"<b>{wallet[:25]}</b><br><b>{date.strftime('%b %d, %Y')}</b><br>{dominant_emoji} {dominant_name}: {format_volume(dominant_volume)} ({dominant_pct:.0f}%)<br><b>Total Volume: {format_volume(total_volume)}</b>")
+            else:
+                row_text.append(f"<b>{wallet[:25]}</b><br><b>{date.strftime('%b %d, %Y')}</b><br><span style='color:#64748b'>No activity</span>")
+        hover_text.append(row_text)
+
+    wallet_labels = [w[:32] + "..." if len(w) > 35 else w for w in wallets]
+
+    month_labels = []
+    month_positions = []
+    from_year = start_date.year
+    to_year = end_date.year
+    for year in range(from_year, to_year + 1):
+        for m in range(1, 13):
+            try:
+                first_day = datetime(year, m, 1)
+                if start_date <= first_day <= end_date:
+                    day_idx = (first_day - start_date).days
+                    label = f"{first_day.strftime('%b')}" if from_year == to_year else f"{first_day.strftime('%b %y')}"
+                    month_labels.append(label)
+                    month_positions.append(day_idx + 15)
+            except:
+                pass
+
+    fig = go.Figure(data=go.Heatmap(
+        z=display_values,
+        x=list(range(num_days_total)),
+        y=wallet_labels,
+        colorscale=activity_colorscale,
+        showscale=False,
+        hoverinfo='text',
+        text=hover_text,
+        xgap=1,
+        ygap=3,
+        hoverongaps=False,
+    ))
+
+    row_height = 28
+    chart_height = max(500, num_wallets * row_height + 120)
+
+    date_format = '%d/%m/%Y'
+    title_text = f"<b>📊 Trading Activity Heatmap: {start_date.strftime(date_format)} - {end_date.strftime(date_format)}</b>"
+
+    fig.update_layout(
+        title=dict(text=title_text, font=dict(size=20, color="#f1f5f9", family="Inter, sans-serif"), x=0.5, y=0.98),
+        height=chart_height,
+        margin=dict(l=280, r=30, t=80, b=60),
+        paper_bgcolor="#0f172a",
+        plot_bgcolor="#0f172a",
+        font=dict(family="Inter, sans-serif", color="#e2e8f0"),
+        xaxis=dict(tickmode='array', tickvals=month_positions, ticktext=month_labels, showgrid=True, gridcolor="rgba(51, 65, 85, 0.3)", zeroline=False, side='top', tickfont=dict(size=10, color="#94a3b8")),
+        yaxis=dict(showgrid=True, gridcolor="rgba(51, 65, 85, 0.2)", zeroline=False, tickfont=dict(size=11, color="#cbd5e1")),
+        hoverlabel=dict(bgcolor="#1e293b", bordercolor="#334155", font=dict(size=13, color="#f1f5f9", family="Inter, sans-serif")),
+    )
+    return fig
+
+
+@st.dialog("Wallet Activity Details", width="large")
+def show_wallet_activity_dialog(wallet_name: str, fills_df: pd.DataFrame, from_date, to_date):
+    """Display detailed wallet activity in a modal dialog"""
+    if fills_df is None or len(fills_df) == 0:
+        st.warning("No activity data available")
+        return
+
+    # Filter for this wallet
+    wallet_fills = fills_df[fills_df['wallet'] == wallet_name].copy()
+
+    if len(wallet_fills) == 0:
+        st.info(f"No trades found for **{wallet_name}** in the selected period")
+        return
+
+    # Calculate volume
+    wallet_fills['volume'] = wallet_fills['size'] * wallet_fills['price']
+
+    # Header
+    st.markdown(f"""
+    <div style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border-radius: 12px; padding: 20px; margin-bottom: 16px; border: 1px solid #3b82f6;">
+        <h2 style="margin: 0; color: #f1f5f9; font-size: 22px;">👛 {wallet_name}</h2>
+        <p style="margin: 8px 0 0 0; color: #94a3b8; font-size: 14px;">
+            {from_date.strftime('%d/%m/%Y')} - {to_date.strftime('%d/%m/%Y')}
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Summary metrics
+    total_trades = len(wallet_fills)
+    total_volume = wallet_fills['volume'].sum()
+    total_pnl = wallet_fills['pnl'].sum()
+    total_fees = wallet_fills['fee'].sum()
+
+    def format_vol(v):
+        if v >= 1_000_000:
+            return f"${v/1_000_000:.2f}M"
+        elif v >= 1_000:
+            return f"${v/1_000:.1f}K"
+        else:
+            return f"${v:.0f}"
+
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("📊 Total Trades", f"{total_trades:,}")
+    with col2:
+        st.metric("💵 Volume", format_vol(total_volume))
+    with col3:
+        pnl_color = "🟢" if total_pnl >= 0 else "🔴"
+        st.metric(f"{pnl_color} Realized PnL", hl_format_currency(total_pnl))
+    with col4:
+        st.metric("💸 Total Fees", format_vol(total_fees))
+
+    st.divider()
+
+    # Trade type breakdown
+    open_long = len(wallet_fills[wallet_fills['direction'] == 'Open Long'])
+    close_long = len(wallet_fills[wallet_fills['direction'] == 'Close Long'])
+    open_short = len(wallet_fills[wallet_fills['direction'] == 'Open Short'])
+    close_short = len(wallet_fills[wallet_fills['direction'] == 'Close Short'])
+
+    open_long_vol = wallet_fills[wallet_fills['direction'] == 'Open Long']['volume'].sum()
+    close_long_vol = wallet_fills[wallet_fills['direction'] == 'Close Long']['volume'].sum()
+    open_short_vol = wallet_fills[wallet_fills['direction'] == 'Open Short']['volume'].sum()
+    close_short_vol = wallet_fills[wallet_fills['direction'] == 'Close Short']['volume'].sum()
+
+    st.markdown("### 📈 Trade Breakdown")
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("🟢 Open Long", f"{open_long:,}", help=f"Volume: {format_vol(open_long_vol)}")
+    with col2:
+        st.metric("🔵 Close Long", f"{close_long:,}", help=f"Volume: {format_vol(close_long_vol)}")
+    with col3:
+        st.metric("🔴 Open Short", f"{open_short:,}", help=f"Volume: {format_vol(open_short_vol)}")
+    with col4:
+        st.metric("🟠 Close Short", f"{close_short:,}", help=f"Volume: {format_vol(close_short_vol)}")
+
+    st.divider()
+
+    # Activity Calendar for this wallet
+    st.markdown("### 📅 Activity Calendar")
+    st.markdown(create_activity_legend(), unsafe_allow_html=True)
+
+    wallet_calendar_fig = create_activity_calendar_range(wallet_fills, from_date, to_date)
+    st.plotly_chart(wallet_calendar_fig, use_container_width=True, config={"displayModeBar": False})
+
+    st.divider()
+
+    # Two columns: Top Coins and PnL by Coin
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("### 🪙 Top Coins by Trades")
+        coin_trades = wallet_fills.groupby('coin').agg({
+            'size': 'count',
+            'volume': 'sum',
+            'pnl': 'sum'
+        }).reset_index()
+        coin_trades.columns = ['Coin', 'Trades', 'Volume', 'PnL']
+        coin_trades = coin_trades.sort_values('Trades', ascending=False).head(10)
+        coin_trades['Volume'] = coin_trades['Volume'].apply(format_vol)
+        coin_trades['PnL'] = coin_trades['PnL'].apply(lambda x: hl_format_currency(x))
+        st.dataframe(coin_trades, hide_index=True, use_container_width=True)
+
+    with col2:
+        st.markdown("### 📊 Daily Activity")
+        wallet_fills['date'] = pd.to_datetime(wallet_fills['timestamp']).dt.date
+        daily_activity = wallet_fills.groupby('date').agg({
+            'size': 'count',
+            'volume': 'sum',
+            'pnl': 'sum'
+        }).reset_index()
+        daily_activity.columns = ['Date', 'Trades', 'Volume', 'PnL']
+        daily_activity = daily_activity.sort_values('Date', ascending=False).head(10)
+        daily_activity['Date'] = daily_activity['Date'].apply(lambda x: x.strftime('%Y-%m-%d'))
+        daily_activity['Volume'] = daily_activity['Volume'].apply(format_vol)
+        daily_activity['PnL'] = daily_activity['PnL'].apply(lambda x: hl_format_currency(x))
+        st.dataframe(daily_activity, hide_index=True, use_container_width=True)
+
+    st.divider()
+
+    # Recent trades
+    st.markdown("### 📜 Recent Trades")
+    recent_trades = wallet_fills.sort_values('timestamp', ascending=False).head(50).copy()
+    recent_trades['timestamp'] = recent_trades['timestamp'].dt.strftime('%Y-%m-%d %H:%M')
+    recent_trades['size'] = recent_trades['size'].apply(lambda x: f"{x:,.4f}")
+    recent_trades['price'] = recent_trades['price'].apply(lambda x: f"${x:,.2f}")
+    recent_trades['volume'] = recent_trades['volume'].apply(format_vol)
+    recent_trades['pnl'] = recent_trades['pnl'].apply(lambda x: hl_format_currency(x))
+    recent_trades['fee'] = recent_trades['fee'].apply(lambda x: f"${x:,.4f}")
+
+    display_cols = ['timestamp', 'coin', 'direction', 'side', 'size', 'price', 'volume', 'pnl', 'fee']
+    recent_trades = recent_trades[display_cols]
+    recent_trades.columns = ['Time', 'Coin', 'Direction', 'Side', 'Size', 'Price', 'Volume', 'PnL', 'Fee']
+
+    st.dataframe(recent_trades, hide_index=True, use_container_width=True, height=400)
+
+
 def render_whale_screener_sidebar():
     """Render Whale Screener sidebar"""
     st.header("🐋 Whale Screener")
@@ -899,7 +1640,7 @@ def render_whale_screener_sidebar():
 
 
 def render_whale_screener_content():
-    """Render Whale Screener main content"""
+    """Render Whale Screener main content with all sections from Greedy68"""
     st.title("🐋 Whale Screener")
     st.caption("Hyperliquid Portfolio Breakdown - Perp vs Spot Analysis")
 
@@ -915,7 +1656,21 @@ def render_whale_screener_content():
     else:
         filtered_df = wallets_df
 
-    st.metric("Showing Wallets", len(filtered_df))
+    filtered_df["display_name"] = filtered_df["trader_address_label"].str[:40]
+
+    # Summary metrics
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Total Wallets", len(filtered_df))
+    with col2:
+        total_value = filtered_df["account_value"].str.replace(",", "").astype(float).sum()
+        st.metric("Total AUM", hl_format_currency(total_value))
+    with col3:
+        st.metric("VCs", len(filtered_df[filtered_df["Entity"] == "VCs"]))
+    with col4:
+        st.metric("Retail", len(filtered_df[filtered_df["Entity"] == "retail"]))
+
+    st.divider()
 
     # Check if we should fetch live data
     if st.session_state.get("whale_fetch_live", False):
@@ -932,19 +1687,20 @@ def render_whale_screener_content():
             breakdown = hl_client.get_portfolio_breakdown(address, period="allTime")
             return {
                 "address": address,
-                "display_name": row["trader_address_label"],
+                "display_name": row["display_name"],
                 "entity": row["Entity"],
                 "breakdown": breakdown
             }
 
-        with ThreadPoolExecutor(max_workers=4) as executor:
+        with ThreadPoolExecutor(max_workers=5) as executor:
             futures = {executor.submit(fetch_portfolio, row): idx for idx, row in filtered_df.iterrows()}
 
             for i, future in enumerate(as_completed(futures)):
                 try:
                     result = future.result()
-                    if result["breakdown"]:
+                    if result["breakdown"] and result["breakdown"].total.account_value > 0:
                         portfolio_data.append({
+                            "address": result["address"],
                             "display_name": result["display_name"],
                             "entity": result["entity"],
                             "total_value": result["breakdown"].total.account_value,
@@ -954,12 +1710,15 @@ def render_whale_screener_content():
                             "spot_pnl": result["breakdown"].spot.pnl,
                             "total_pnl": result["breakdown"].total.pnl,
                             "perp_pct": (result["breakdown"].perp.account_value / max(result["breakdown"].total.account_value, 1)) * 100,
+                            "total_volume": result["breakdown"].total.volume,
+                            "perp_volume": result["breakdown"].perp.volume,
+                            "spot_volume": result["breakdown"].spot.volume,
                         })
-                except Exception as e:
+                except Exception:
                     pass
 
                 progress_bar.progress((i + 1) / len(futures))
-                status_text.text(f"Fetched {i + 1}/{len(futures)} wallets...")
+                status_text.text(f"Fetched {i + 1}/{len(futures)} wallets ({len(portfolio_data)} with data)")
 
         progress_bar.empty()
         status_text.empty()
@@ -968,50 +1727,400 @@ def render_whale_screener_content():
             portfolio_df = pd.DataFrame(portfolio_data)
             portfolio_df = portfolio_df.sort_values("total_value", ascending=False)
             st.session_state.whale_portfolio_df = portfolio_df
+            st.success(f"✅ Fetched data for {len(portfolio_data)} wallets")
+        else:
+            st.error("❌ No data fetched. Try again.")
 
         st.session_state.whale_fetch_live = False
         st.rerun()
 
     # Display portfolio data if available
-    if "whale_portfolio_df" in st.session_state:
-        portfolio_df = st.session_state.whale_portfolio_df
+    if "whale_portfolio_df" in st.session_state and len(st.session_state.whale_portfolio_df) > 0:
+        portfolio_df = st.session_state.whale_portfolio_df.copy()
 
-        # Summary metrics
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric("Total AUM", hl_format_currency(portfolio_df["total_value"].sum()))
-        with col2:
-            st.metric("Perp Value", hl_format_currency(portfolio_df["perp_value"].sum()))
-        with col3:
-            st.metric("Spot Value", hl_format_currency(portfolio_df["spot_value"].sum()))
-        with col4:
-            avg_perp = portfolio_df["perp_pct"].mean()
-            st.metric("Avg Perp %", f"{avg_perp:.1f}%")
+        # ==================== SECTION 1: Portfolio Breakdown ====================
+        st.subheader("📊 Portfolio Breakdown")
+        col_title, col_toggle = st.columns([3, 1])
+        with col_toggle:
+            chart_mode = st.toggle("Show as %", value=True, help="Toggle between absolute values and percentage allocation")
+
+        chart_height = max(400, len(portfolio_df) * 25)
+        display_mode = "percentage" if chart_mode else "value"
+        fig = create_screening_chart(portfolio_df, metric="value", height=chart_height, mode=display_mode)
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
         st.divider()
 
-        # Chart options
+        # ==================== SECTION 2: Distribution Maps ====================
+        st.subheader("🗺️ Distribution Maps")
+
+        # Value vs Perp % Heatmap
+        st.markdown("#### Account Value vs Perp Allocation")
+        st.caption("Heatmap showing how many wallets fall into each Value/Perp% bucket")
+
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            fig = create_value_perp_heatmap(portfolio_df.copy())
+            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+        with col2:
+            st.markdown("##### 📈 Insights")
+            high_perp = len(portfolio_df[portfolio_df['perp_pct'] > 80])
+            low_perp = len(portfolio_df[portfolio_df['perp_pct'] < 20])
+            whales_high_perp = len(portfolio_df[(portfolio_df['total_value'] > 10e6) & (portfolio_df['perp_pct'] > 80)])
+
+            st.metric("High Perp (>80%)", high_perp)
+            st.metric("Low Perp (<20%)", low_perp)
+            st.metric("Whales >$10M + High Perp", whales_high_perp)
+
+        # Histograms
         col1, col2 = st.columns(2)
         with col1:
-            metric_choice = st.radio("Metric", ["Value", "PnL"], horizontal=True, key="whale_metric")
+            fig = create_histogram(portfolio_df, "perp_pct", "Perp %", bins=10)
+            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
         with col2:
-            mode_choice = st.radio("Display", ["Absolute", "Percentage"], horizontal=True, key="whale_mode")
-
-        metric_map = {"Value": "value", "PnL": "pnl"}
-        mode_map = {"Absolute": "value", "Percentage": "percentage"}
-
-        # Create chart
-        fig = create_screening_chart(
-            portfolio_df,
-            metric=metric_map[metric_choice],
-            height=max(400, len(portfolio_df) * 25),
-            mode=mode_map[mode_choice]
-        )
-        st.plotly_chart(fig, use_container_width=True)
+            fig = create_histogram(portfolio_df, "total_value", "Account Value ($)", bins=15)
+            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
         st.divider()
 
-        # Data table
+        # Entity Distribution
+        st.markdown("#### 🏢 Entity Type vs Perp Allocation")
+        st.caption("Heatmap showing total AUM by entity type and Perp% range")
+
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            fig = create_entity_perp_heatmap(portfolio_df.copy())
+            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+        with col2:
+            st.markdown("##### 🏢 Entity Summary")
+            entity_summary = portfolio_df.groupby('entity').agg({
+                'total_value': 'sum',
+                'perp_pct': 'mean',
+                'address': 'count'
+            }).round(1)
+            entity_summary.columns = ['Total AUM', 'Avg Perp %', 'Count']
+            entity_summary['Total AUM'] = entity_summary['Total AUM'].apply(lambda x: hl_format_currency(x))
+            entity_summary['Avg Perp %'] = entity_summary['Avg Perp %'].apply(lambda x: f"{x:.1f}%")
+            st.dataframe(entity_summary, use_container_width=True)
+
+        st.divider()
+
+        # Value vs PnL
+        st.markdown("#### 💰 Account Value vs PnL")
+        st.caption("Heatmap showing wallet distribution by value and profitability")
+
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            fig = create_value_pnl_heatmap(portfolio_df.copy())
+            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+        with col2:
+            st.markdown("##### 💰 PnL Summary")
+            profitable = len(portfolio_df[portfolio_df['total_pnl'] > 0])
+            losing = len(portfolio_df[portfolio_df['total_pnl'] < 0])
+            total_pnl = portfolio_df['total_pnl'].sum()
+            avg_pnl = portfolio_df['total_pnl'].mean()
+
+            st.metric("Profitable Wallets", profitable)
+            st.metric("Losing Wallets", losing)
+            st.metric("Total PnL", hl_format_currency(total_pnl))
+            st.metric("Avg PnL", hl_format_currency(avg_pnl))
+
+        # PnL histogram
+        fig = create_histogram(portfolio_df, "total_pnl", "PnL ($)", bins=20)
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+        st.divider()
+
+        # ==================== SECTION 3: Key Activity Calendar ====================
+        st.subheader("📅 Key Activity Calendar")
+        st.caption("GitHub-style heatmap showing trading activity over time")
+
+        # Wallet selector for activity
+        col1, col2, col3, col4 = st.columns([2, 1, 1, 0.8])
+        with col1:
+            wallet_options = ["📊 All Wallets"] + portfolio_df["display_name"].tolist()
+            selected_wallet = st.selectbox("Select Wallet", wallet_options, key="activity_wallet")
+        with col2:
+            from_date = st.date_input("From Date", value=datetime(datetime.now().year, 1, 1), min_value=datetime(2020, 1, 1), max_value=datetime.now(), key="from_date_input")
+        with col3:
+            to_date = st.date_input("To Date", value=datetime.now(), min_value=datetime(2020, 1, 1), max_value=datetime.now(), key="to_date_input")
+        with col4:
+            st.write("")
+            fetch_activity = st.button("🔄 Fetch Activity", type="primary", key="fetch_activity_btn")
+
+        if from_date > to_date:
+            st.error("⚠️ 'From Date' must be <= 'To Date'")
+
+        # Legend
+        st.markdown(create_activity_legend(), unsafe_allow_html=True)
+
+        if fetch_activity and from_date <= to_date:
+            is_all_wallets = selected_wallet == "📊 All Wallets"
+            from_year = from_date.year
+            to_year = to_date.year
+            year_range = list(range(from_year, to_year + 1))
+            date_label = f"{from_date.strftime('%d/%m/%Y')} - {to_date.strftime('%d/%m/%Y')}"
+
+            if is_all_wallets:
+                # Fetch from all wallets
+                all_wallets_df = filtered_df.copy()
+                total_wallets = len(all_wallets_df)
+
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+
+                all_fills = []
+                start_time = datetime(from_date.year, from_date.month, from_date.day)
+                end_time = datetime(to_date.year, to_date.month, to_date.day, 23, 59, 59)
+
+                wallet_list = [(row["trader_address"], row["display_name"]) for _, row in all_wallets_df.iterrows()]
+
+                fetch_stats = {'success': 0, 'empty': 0, 'failed': 0, 'total_trades': 0}
+
+                client = HyperliquidClient()
+                max_retries = 3
+
+                status_text.text(f"🔄 Sequential fetching for reliability ({total_wallets} wallets)...")
+
+                for idx, (wallet_address, wallet_name) in enumerate(wallet_list):
+                    wallet_fills = []
+
+                    for attempt in range(max_retries):
+                        try:
+                            fills = client.get_user_fills_paginated(wallet_address, start_time, end_time, max_fills=10000)
+                            if fills:
+                                wallet_fills = fills
+                                break
+                            if attempt < max_retries - 1:
+                                time.sleep(0.5)
+                        except Exception:
+                            if attempt < max_retries - 1:
+                                time.sleep((attempt + 1) * 1.0)
+
+                    if wallet_fills:
+                        fetch_stats['success'] += 1
+                        fetch_stats['total_trades'] += len(wallet_fills)
+                        for f in wallet_fills:
+                            all_fills.append({
+                                'wallet': wallet_name,
+                                'coin': f.coin,
+                                'side': f.side,
+                                'direction': f.direction,
+                                'size': f.size,
+                                'price': f.price,
+                                'pnl': f.pnl,
+                                'timestamp': f.timestamp,
+                                'fee': f.fee
+                            })
+                    else:
+                        fetch_stats['empty'] += 1
+
+                    completed = idx + 1
+                    progress_bar.progress(completed / total_wallets)
+                    status_text.text(f"🔄 {completed}/{total_wallets} | ✅ {fetch_stats['success']} with data | ⚪ {fetch_stats['empty']} empty | 📊 {fetch_stats['total_trades']} trades")
+
+                progress_bar.empty()
+                status_text.empty()
+
+                st.session_state.calendar_years = year_range
+                st.session_state.calendar_from_date = from_date
+                st.session_state.calendar_to_date = to_date
+                st.session_state.activity_mode = "all"
+                st.session_state.all_wallet_names = all_wallets_df["display_name"].tolist()
+
+                if all_fills:
+                    st.session_state.activity_fills = pd.DataFrame(all_fills)
+                    st.success(f"✅ Found {len(all_fills)} trades across all wallets in {date_label}")
+                else:
+                    st.warning(f"No trades found for {date_label}")
+                    st.session_state.activity_fills = pd.DataFrame()
+            else:
+                # Fetch single wallet
+                wallet_row = portfolio_df[portfolio_df["display_name"] == selected_wallet].iloc[0]
+                wallet_address = wallet_row["address"]
+
+                max_retries = 3
+                status_placeholder = st.empty()
+                fills = []
+
+                for attempt in range(max_retries):
+                    retry_text = f" (retry {attempt})" if attempt > 0 else ""
+                    with status_placeholder.container():
+                        with st.spinner(f"Fetching trades for {selected_wallet} ({date_label}){retry_text}..."):
+                            client = HyperliquidClient()
+                            start_time = datetime(from_date.year, from_date.month, from_date.day)
+                            end_time = datetime(to_date.year, to_date.month, to_date.day, 23, 59, 59)
+
+                            try:
+                                fills = client.get_user_fills_paginated(wallet_address, start_time, end_time, max_fills=10000)
+                                if fills:
+                                    break
+                                if attempt < max_retries - 1:
+                                    time.sleep(0.5)
+                            except Exception:
+                                if attempt < max_retries - 1:
+                                    time.sleep(0.5)
+
+                status_placeholder.empty()
+
+                st.session_state.calendar_years = year_range
+                st.session_state.calendar_from_date = from_date
+                st.session_state.calendar_to_date = to_date
+                st.session_state.activity_mode = "single"
+
+                if fills:
+                    fills_df = pd.DataFrame([{
+                        'wallet': selected_wallet,
+                        'coin': f.coin,
+                        'side': f.side,
+                        'direction': f.direction,
+                        'size': f.size,
+                        'price': f.price,
+                        'pnl': f.pnl,
+                        'timestamp': f.timestamp,
+                        'fee': f.fee
+                    } for f in fills])
+
+                    st.session_state.activity_fills = fills_df
+                    st.success(f"✅ Found {len(fills)} trades in {date_label}")
+                else:
+                    st.warning(f"No trades found for {date_label} after {max_retries} attempts")
+                    st.session_state.activity_fills = pd.DataFrame()
+
+        # Display calendar if data exists
+        if "activity_fills" in st.session_state:
+            fills_df = st.session_state.activity_fills
+            cal_from_date = st.session_state.get("calendar_from_date", datetime(datetime.now().year, 1, 1))
+            cal_to_date = st.session_state.get("calendar_to_date", datetime.now())
+
+            fig = create_activity_calendar_range(fills_df, cal_from_date, cal_to_date)
+            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False}, key=f"main_calendar_{cal_from_date}_{cal_to_date}")
+
+            # Date selector for viewing details
+            if len(fills_df) > 0:
+                fills_df_temp = fills_df.copy()
+                fills_df_temp['date'] = pd.to_datetime(fills_df_temp['timestamp']).dt.date
+                available_dates = sorted(fills_df_temp['date'].unique(), reverse=True)
+
+                st.markdown("### 🔍 View Date Details")
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    date_options = ["Select a date..."] + [d.strftime('%Y-%m-%d') for d in available_dates]
+                    selected_date_str = st.selectbox("Select date to view details", options=date_options, key="date_detail_selector", label_visibility="collapsed")
+
+                if selected_date_str != "Select a date...":
+                    st.divider()
+                    render_date_details_popup(fills_df, selected_date_str)
+
+            if len(fills_df) > 0:
+                st.divider()
+
+                # Summary stats
+                open_long = len(fills_df[fills_df['direction'] == 'Open Long'])
+                close_long = len(fills_df[fills_df['direction'] == 'Close Long'])
+                open_short = len(fills_df[fills_df['direction'] == 'Open Short'])
+                close_short = len(fills_df[fills_df['direction'] == 'Close Short'])
+                total_pnl = fills_df['pnl'].sum()
+
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric("Total Trades", len(fills_df))
+                with col2:
+                    st.metric("Realized PnL", hl_format_currency(total_pnl))
+
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("🟢 Open Long", f"{open_long:,}")
+                with col2:
+                    st.metric("🔵 Close Long", f"{close_long:,}")
+                with col3:
+                    st.metric("🔴 Open Short", f"{open_short:,}")
+                with col4:
+                    st.metric("🟠 Close Short", f"{close_short:,}")
+
+                # Show all wallets heatmap if in all mode
+                is_all_mode = st.session_state.get("activity_mode", "single") == "all"
+                if is_all_mode and 'wallet' in fills_df.columns:
+                    st.divider()
+                    st.markdown("""
+                    <div style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border-radius: 16px; padding: 24px; margin: 16px 0; border: 1px solid #334155;">
+                        <h2 style="margin: 0; color: #f1f5f9; font-size: 24px;">👛 All Wallets Activity</h2>
+                        <p style="margin: 8px 0 0 0; color: #94a3b8; font-size: 14px;">Each row represents a wallet • Columns are days • Hover for details</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                    # Wallet detail selector
+                    wallet_list_sorted = fills_df.groupby('wallet')['pnl'].sum().sort_values(ascending=False).index.tolist()
+                    col_select, col_btn = st.columns([3, 1])
+                    with col_select:
+                        detail_wallet = st.selectbox(
+                            "🔍 Select wallet to view details",
+                            options=["Select a wallet..."] + wallet_list_sorted,
+                            key="detail_wallet_selector"
+                        )
+                    with col_btn:
+                        st.write("")  # Spacing
+                        view_detail_btn = st.button("📊 View Details", type="primary", key="view_wallet_detail_btn", disabled=(detail_wallet == "Select a wallet..."))
+
+                    if view_detail_btn and detail_wallet != "Select a wallet...":
+                        show_wallet_activity_dialog(detail_wallet, fills_df, cal_from_date, cal_to_date)
+
+                    all_wallet_names = st.session_state.get("all_wallet_names", None)
+                    all_wallets_fig = create_all_wallets_heatmap(fills_df.copy(), cal_from_date, cal_to_date, all_wallet_names)
+                    if all_wallets_fig:
+                        st.plotly_chart(all_wallets_fig, use_container_width=True, config={"displayModeBar": True, "modeBarButtonsToRemove": ["lasso2d", "select2d"], "displaylogo": False}, key=f"all_wallets_heatmap_{cal_from_date}_{cal_to_date}")
+
+                st.divider()
+
+                # Recent trades table
+                st.markdown("### 📜 Recent Trades")
+                recent_df = fills_df.sort_values('timestamp', ascending=False).head(100).copy()
+                recent_df['timestamp'] = recent_df['timestamp'].dt.strftime('%Y-%m-%d %H:%M')
+                recent_df['size'] = recent_df['size'].apply(lambda x: f"{x:,.4f}")
+                recent_df['price'] = recent_df['price'].apply(lambda x: f"${x:,.2f}")
+                recent_df['pnl'] = recent_df['pnl'].apply(lambda x: hl_format_currency(x))
+                recent_df['fee'] = recent_df['fee'].apply(lambda x: f"${x:,.4f}")
+
+                if is_all_mode and 'wallet' in recent_df.columns:
+                    display_cols = ['timestamp', 'wallet', 'coin', 'direction', 'size', 'price', 'pnl', 'fee']
+                    recent_df = recent_df[display_cols]
+                    recent_df.columns = ['Time', 'Wallet', 'Coin', 'Direction', 'Size', 'Price', 'Realized PnL', 'Fee']
+                else:
+                    display_cols = ['timestamp', 'coin', 'direction', 'size', 'price', 'pnl', 'fee']
+                    recent_df = recent_df[display_cols]
+                    recent_df.columns = ['Time', 'Coin', 'Direction', 'Size', 'Price', 'Realized PnL', 'Fee']
+
+                st.dataframe(recent_df, hide_index=True, use_container_width=True, height=400)
+
+                # Trade breakdown by coin
+                st.divider()
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    st.markdown("### 🪙 Activity by Coin")
+                    coin_activity = fills_df.groupby('coin').agg({'size': 'count', 'pnl': 'sum'}).reset_index()
+                    coin_activity.columns = ['Coin', 'Trades', 'PnL']
+                    coin_activity = coin_activity.sort_values('Trades', ascending=False).head(10)
+                    coin_activity['PnL'] = coin_activity['PnL'].apply(lambda x: hl_format_currency(x))
+                    st.dataframe(coin_activity, hide_index=True, use_container_width=True)
+
+                if is_all_mode and 'wallet' in fills_df.columns:
+                    with col2:
+                        st.markdown("### 👛 Activity by Wallet")
+                        wallet_activity = fills_df.groupby('wallet').agg({'size': 'count', 'pnl': 'sum'}).reset_index()
+                        wallet_activity.columns = ['Wallet', 'Trades', 'PnL']
+                        wallet_activity = wallet_activity.sort_values('Trades', ascending=False)
+                        wallet_activity_display = wallet_activity.head(10).copy()
+                        wallet_activity_display['PnL'] = wallet_activity_display['PnL'].apply(lambda x: hl_format_currency(x))
+                        st.dataframe(wallet_activity_display, hide_index=True, use_container_width=True)
+        else:
+            st.info("👆 Select a wallet and click 'Fetch Activity' to view trading calendar")
+
+        # Detailed table at the bottom
+        st.divider()
         st.subheader("📋 Detailed Data")
         table_df = portfolio_df[["display_name", "entity", "total_value", "perp_value", "spot_value", "perp_pct", "total_pnl"]].copy()
         table_df.columns = ["Wallet", "Entity", "Total Value", "Perp Value", "Spot Value", "Perp %", "PnL"]
@@ -1022,6 +2131,7 @@ def render_whale_screener_content():
         table_df["PnL"] = table_df["PnL"].apply(lambda x: hl_format_currency(x))
 
         st.dataframe(table_df, hide_index=True, use_container_width=True, height=400)
+
     else:
         st.info("👆 Click 'Fetch Live Data' in the sidebar to load real-time Perp/Spot breakdown")
 
