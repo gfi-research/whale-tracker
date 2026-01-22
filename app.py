@@ -98,6 +98,51 @@ def get_nansen_client():
 nansen_client = get_nansen_client()
 
 
+# ==================== PERSISTENT CACHING ====================
+# These functions cache data across sessions (survives tab switches and refreshes)
+
+@st.cache_data(ttl=300, show_spinner=False)  # 5 minutes cache
+def cached_get_wallet_positions(address: str):
+    """Cache wallet positions from Nansen API for 5 minutes."""
+    return nansen_client.get_wallet_positions(address)
+
+
+@st.cache_data(ttl=120, show_spinner=False)  # 2 minutes cache
+def cached_get_open_orders(address: str):
+    """Cache open orders from Hyperliquid API for 2 minutes."""
+    try:
+        hl_client = HyperliquidClient()
+        return hl_client.get_open_orders(address)
+    except Exception:
+        return []
+
+
+@st.cache_data(ttl=300, show_spinner=False)  # 5 minutes cache
+def cached_get_portfolio_breakdown(address: str, period: str = "day"):
+    """Cache portfolio breakdown from Hyperliquid API for 5 minutes."""
+    try:
+        hl_client = HyperliquidClient()
+        return hl_client.get_portfolio_breakdown(address, period)
+    except Exception:
+        return None
+
+
+@st.cache_data(ttl=300, show_spinner=False)  # 5 minutes cache
+def cached_get_user_fills(address: str, start_time: datetime, end_time: datetime = None):
+    """Cache user fills from Hyperliquid API for 5 minutes."""
+    try:
+        hl_client = HyperliquidClient()
+        return hl_client.get_user_fills_by_time(address, start_time, end_time)
+    except Exception:
+        return []
+
+
+@st.cache_data(ttl=600, show_spinner=False)  # 10 minutes cache
+def cached_get_token_positions(token_symbol: str, per_page: int = 100, min_position_value: float = 10000):
+    """Cache token positions from Nansen API for 10 minutes."""
+    return nansen_client.get_token_positions(token_symbol, per_page=per_page, min_position_value=min_position_value)
+
+
 @st.dialog("Position Details", width="large")
 def show_position_dialog(wallet_data: dict):
     """Display wallet positions in a modal dialog"""
@@ -111,25 +156,16 @@ def show_position_dialog(wallet_data: dict):
         st.caption(f"`{address}`")
     with col_reload:
         if st.button("🔄 Reload", key=f"reload_{address}", help="Fetch latest data"):
-            cache_key = f"positions_{address}"
-            if cache_key in st.session_state:
-                del st.session_state[cache_key]
+            # Clear persistent cache for this address
+            cached_get_wallet_positions.clear()
+            cached_get_open_orders.clear()
             st.rerun()
 
-    cache_key = f"positions_{address}"
+    # Use persistent cache (survives tab switches)
+    with st.spinner("Loading positions..."):
+        position_data = cached_get_wallet_positions(address)
 
-    if cache_key in st.session_state:
-        position_data = st.session_state[cache_key]
-        is_cached = True
-    else:
-        with st.spinner("Loading positions from Nansen API..."):
-            position_data = nansen_client.get_wallet_positions(address)
-        if position_data:
-            st.session_state[cache_key] = position_data
-        is_cached = False
-
-    if is_cached:
-        st.caption("📦 **Cached data** - Click Reload for latest")
+    st.caption("📦 **Cached 5 min** - Click Reload for latest")
 
     if position_data:
         col1, col2, col3, col4 = st.columns(4)
@@ -152,17 +188,8 @@ def show_position_dialog(wallet_data: dict):
         if asset_positions:
             st.markdown("#### Open Positions")
 
-            # Fetch open orders from Hyperliquid API
-            orders_cache_key = f"orders_{address}"
-            if orders_cache_key in st.session_state:
-                open_orders = st.session_state[orders_cache_key]
-            else:
-                try:
-                    hl_client = HyperliquidClient()
-                    open_orders = hl_client.get_open_orders(address)
-                    st.session_state[orders_cache_key] = open_orders
-                except Exception:
-                    open_orders = []
+            # Fetch open orders from Hyperliquid API (persistent cache)
+            open_orders = cached_get_open_orders(address)
 
             # Count orders per coin
             orders_by_coin = {}
@@ -275,16 +302,17 @@ def render_smart_money_sidebar():
             st.rerun()
     with col2:
         if st.button("🗑️ Clear"):
-            keys_to_delete = [k for k in st.session_state.keys() if k.startswith("positions_") or k.startswith("token_positions_")]
+            # Clear session state flags
+            keys_to_delete = [k for k in st.session_state.keys() if k.startswith("positions_") or k.startswith("token_positions_") or k.startswith("loaded_")]
             for k in keys_to_delete:
                 del st.session_state[k]
+            # Clear persistent cache
             st.cache_data.clear()
             st.rerun()
 
-    wallet_cache = len([k for k in st.session_state.keys() if k.startswith("positions_")])
-    token_cache = len([k for k in st.session_state.keys() if k.startswith("token_positions_")])
-    if wallet_cache > 0 or token_cache > 0:
-        st.caption(f"📦 {wallet_cache} wallets, {token_cache} tokens")
+    loaded_tokens = len([k for k in st.session_state.keys() if k.startswith("loaded_")])
+    if loaded_tokens > 0:
+        st.caption(f"📦 {loaded_tokens} tokens cached (10 min TTL)")
 
     st.divider()
     st.caption("Credit costs:")
@@ -716,9 +744,12 @@ def render_smart_money_content():
             st.caption("Click on token to expand positions")
         with col_reload:
             if st.button("🔄 Reload All", key="reload_all_tokens"):
-                keys_to_delete = [k for k in st.session_state.keys() if k.startswith("token_positions_")]
+                # Clear loaded flags
+                keys_to_delete = [k for k in st.session_state.keys() if k.startswith("loaded_")]
                 for k in keys_to_delete:
                     del st.session_state[k]
+                # Clear persistent cache for token positions
+                cached_get_token_positions.clear()
                 st.rerun()
 
         # Get tokens from token_summary (sorted by UPNL), fallback to default list
@@ -729,13 +760,16 @@ def render_smart_money_content():
             tokens = ["BTC", "ETH", "SOL", "ARB", "DOGE", "AVAX", "LINK", "OP", "APT", "SUI"]
 
         for token in tokens:
-            cache_key = f"token_positions_{token}"
+            # Check session state for UI state (whether user has loaded this token)
+            loaded_key = f"loaded_{token}"
+            is_loaded = st.session_state.get(loaded_key, False)
+            positions = None
 
-            if cache_key in st.session_state:
-                positions = st.session_state[cache_key]
+            if is_loaded:
+                # Use persistent cache (survives tab switches)
+                positions = cached_get_token_positions(token)
                 is_cached = True
             else:
-                positions = None
                 is_cached = False
 
             if positions:
@@ -772,9 +806,9 @@ def render_smart_money_content():
             with st.expander(title, expanded=False):
                 if not positions:
                     with st.spinner(f"Loading {token} positions..."):
-                        positions = nansen_client.get_token_positions(token, per_page=100)
+                        positions = cached_get_token_positions(token)
                     if positions:
-                        st.session_state[cache_key] = positions
+                        st.session_state[loaded_key] = True
                     else:
                         st.warning(f"No positions found for {token}")
                         continue
