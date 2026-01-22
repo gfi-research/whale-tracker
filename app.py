@@ -197,6 +197,10 @@ def show_position_dialog(wallet_data: dict):
                 coin = order.get('coin', '')
                 orders_by_coin[coin] = orders_by_coin.get(coin, 0) + 1
 
+            # Debug: Show total open orders count
+            if open_orders:
+                st.caption(f"📋 {len(open_orders)} open orders: {dict(orders_by_coin)}")
+
             for pos_data in asset_positions:
                 pos = pos_data.get('position', {})
                 token = pos.get('token_symbol', 'Unknown')
@@ -258,10 +262,7 @@ def show_position_dialog(wallet_data: dict):
         st.error("Failed to fetch position data from API")
 
     tracker = get_usage_tracker()
-    if is_cached:
-        st.caption(f"💰 **0 credits** (cached) | Session total: {tracker.total_credits_used} credits")
-    else:
-        st.caption(f"💰 **1 credit** used | Session total: {tracker.total_credits_used} credits")
+    st.caption(f"💰 Session total: {tracker.total_credits_used} credits")
 
 
 def render_smart_money_sidebar():
