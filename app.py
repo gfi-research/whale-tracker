@@ -112,8 +112,13 @@ def cached_get_open_orders(address: str):
     """Cache open orders from Hyperliquid API (persists until manual reload)."""
     try:
         hl_client = HyperliquidClient()
-        return hl_client.get_open_orders(address)
-    except Exception:
+        orders = hl_client.get_open_orders(address)
+        print(f"[DEBUG] Open orders for {address[:10]}...: {len(orders) if orders else 0} orders")
+        if orders:
+            print(f"[DEBUG] Sample order: {orders[0] if orders else 'None'}")
+        return orders if orders else []
+    except Exception as e:
+        print(f"[DEBUG] Error fetching open orders: {e}")
         return []
 
 
