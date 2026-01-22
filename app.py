@@ -2259,9 +2259,18 @@ def render_whale_screener_content():
         st.info("👆 Click 'Fetch Live Data' in the sidebar to load real-time Perp/Spot breakdown")
 
         st.subheader("📋 Loaded Wallets (from CSV)")
-        display_df = filtered_df[["trader_address_label", "Entity", "account_value", "roi", "total_pnl(unrealize profit)"]].copy()
-        display_df.columns = ["Wallet", "Entity", "Account Value", "ROI", "Unrealized PnL"]
-        st.dataframe(display_df, hide_index=True, use_container_width=True, height=600)
+        # Only select columns that exist in the DataFrame
+        desired_cols = ["trader_address_label", "Entity", "account_value", "roi", "total_pnl(unrealize profit)"]
+        display_cols = ["Wallet", "Entity", "Account Value", "ROI", "Unrealized PnL"]
+        available_cols = [col for col in desired_cols if col in filtered_df.columns]
+        available_display_cols = [display_cols[i] for i, col in enumerate(desired_cols) if col in filtered_df.columns]
+
+        if available_cols:
+            display_df = filtered_df[available_cols].copy()
+            display_df.columns = available_display_cols
+            st.dataframe(display_df, hide_index=True, use_container_width=True, height=600)
+        else:
+            st.warning("No data available to display")
 
 
 # ==================== TOKEN TRACKER DASHBOARD ====================
