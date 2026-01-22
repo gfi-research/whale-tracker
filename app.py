@@ -1680,6 +1680,7 @@ def render_whale_screener_content():
     else:
         filtered_df = wallets_df
 
+    filtered_df = filtered_df.copy()
     filtered_df["display_name"] = filtered_df["trader_address_label"].str[:40]
 
     # Summary metrics
@@ -1687,12 +1688,22 @@ def render_whale_screener_content():
     with col1:
         st.metric("Total Wallets", len(filtered_df))
     with col2:
-        total_value = filtered_df["account_value"].str.replace(",", "").astype(float).sum()
+        # Handle account_value column - might be string with commas or numeric
+        if "account_value" in filtered_df.columns:
+            try:
+                if filtered_df["account_value"].dtype == object:
+                    total_value = filtered_df["account_value"].str.replace(",", "").astype(float).sum()
+                else:
+                    total_value = filtered_df["account_value"].sum()
+            except Exception:
+                total_value = 0
+        else:
+            total_value = 0
         st.metric("Total AUM", hl_format_currency(total_value))
     with col3:
-        st.metric("VCs", len(filtered_df[filtered_df["Entity"] == "VCs"]))
+        st.metric("VCs", len(filtered_df[filtered_df["Entity"] == "VCs"]) if "Entity" in filtered_df.columns else 0)
     with col4:
-        st.metric("Retail", len(filtered_df[filtered_df["Entity"] == "retail"]))
+        st.metric("Retail", len(filtered_df[filtered_df["Entity"] == "retail"]) if "Entity" in filtered_df.columns else 0)
 
     st.divider()
 
