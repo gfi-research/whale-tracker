@@ -152,6 +152,24 @@ def show_position_dialog(wallet_data: dict):
         if asset_positions:
             st.markdown("#### Open Positions")
 
+            # Fetch open orders from Hyperliquid API
+            orders_cache_key = f"orders_{address}"
+            if orders_cache_key in st.session_state:
+                open_orders = st.session_state[orders_cache_key]
+            else:
+                try:
+                    hl_client = HyperliquidClient()
+                    open_orders = hl_client.get_open_orders(address)
+                    st.session_state[orders_cache_key] = open_orders
+                except Exception:
+                    open_orders = []
+
+            # Count orders per coin
+            orders_by_coin = {}
+            for order in open_orders:
+                coin = order.get('coin', '')
+                orders_by_coin[coin] = orders_by_coin.get(coin, 0) + 1
+
             for pos_data in asset_positions:
                 pos = pos_data.get('position', {})
                 token = pos.get('token_symbol', 'Unknown')
@@ -160,7 +178,7 @@ def show_position_dialog(wallet_data: dict):
                 direction_emoji = "🟢" if size > 0 else "🔴"
 
                 with st.container():
-                    cols = st.columns([1.5, 1, 1, 1, 1, 1])
+                    cols = st.columns([1.5, 1, 1, 1, 1, 1, 0.8])
 
                     with cols[0]:
                         st.markdown(f"**{token}** {direction_emoji} {direction}")
@@ -197,6 +215,14 @@ def show_position_dialog(wallet_data: dict):
                         liq_price = float(pos.get('liquidation_price_usd') or 0)
                         st.markdown("**Liq Price**")
                         st.markdown(f"${liq_price:,.2f}")
+
+                    with cols[6]:
+                        order_count = orders_by_coin.get(token, 0)
+                        st.markdown("**Order/Pos**")
+                        if order_count > 0:
+                            st.markdown(f":blue[{order_count}]")
+                        else:
+                            st.markdown("0")
 
                     st.divider()
         else:

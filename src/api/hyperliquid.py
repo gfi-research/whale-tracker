@@ -177,6 +177,23 @@ class HyperliquidClient:
             volume=volume
         )
 
+    def get_open_orders(self, user_address: str) -> List[dict]:
+        """
+        Fetch user's open orders.
+
+        Args:
+            user_address: Ethereum address (0x...)
+
+        Returns:
+            List of open order dicts with coin, side, sz, limitPx, etc.
+        """
+        try:
+            response = self._make_request({"type": "openOrders", "user": user_address})
+            return response if response else []
+        except Exception as e:
+            print(f"Error fetching open orders: {e}")
+            return []
+
     def get_user_fills(self, user_address: str, limit: int = 2000) -> List[TradeFill]:
         """
         Fetch user's trade fills (trading history).
