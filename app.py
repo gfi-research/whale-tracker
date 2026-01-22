@@ -99,17 +99,17 @@ nansen_client = get_nansen_client()
 
 
 # ==================== PERSISTENT CACHING ====================
-# These functions cache data across sessions (survives tab switches and refreshes)
+# Cache persists until user manually clicks Reload/Fetch button
 
-@st.cache_data(ttl=300, show_spinner=False)  # 5 minutes cache
+@st.cache_data(show_spinner=False)
 def cached_get_wallet_positions(address: str):
-    """Cache wallet positions from Nansen API for 5 minutes."""
+    """Cache wallet positions from Nansen API (persists until manual reload)."""
     return nansen_client.get_wallet_positions(address)
 
 
-@st.cache_data(ttl=120, show_spinner=False)  # 2 minutes cache
+@st.cache_data(show_spinner=False)
 def cached_get_open_orders(address: str):
-    """Cache open orders from Hyperliquid API for 2 minutes."""
+    """Cache open orders from Hyperliquid API (persists until manual reload)."""
     try:
         hl_client = HyperliquidClient()
         return hl_client.get_open_orders(address)
@@ -117,9 +117,9 @@ def cached_get_open_orders(address: str):
         return []
 
 
-@st.cache_data(ttl=300, show_spinner=False)  # 5 minutes cache
+@st.cache_data(show_spinner=False)
 def cached_get_portfolio_breakdown(address: str, period: str = "day"):
-    """Cache portfolio breakdown from Hyperliquid API for 5 minutes."""
+    """Cache portfolio breakdown from Hyperliquid API (persists until manual reload)."""
     try:
         hl_client = HyperliquidClient()
         return hl_client.get_portfolio_breakdown(address, period)
@@ -127,9 +127,9 @@ def cached_get_portfolio_breakdown(address: str, period: str = "day"):
         return None
 
 
-@st.cache_data(ttl=300, show_spinner=False)  # 5 minutes cache
+@st.cache_data(show_spinner=False)
 def cached_get_user_fills(address: str, start_time: datetime, end_time: datetime = None):
-    """Cache user fills from Hyperliquid API for 5 minutes."""
+    """Cache user fills from Hyperliquid API (persists until manual reload)."""
     try:
         hl_client = HyperliquidClient()
         return hl_client.get_user_fills_by_time(address, start_time, end_time)
@@ -137,9 +137,9 @@ def cached_get_user_fills(address: str, start_time: datetime, end_time: datetime
         return []
 
 
-@st.cache_data(ttl=600, show_spinner=False)  # 10 minutes cache
+@st.cache_data(show_spinner=False)
 def cached_get_token_positions(token_symbol: str, per_page: int = 100, min_position_value: float = 10000):
-    """Cache token positions from Nansen API for 10 minutes."""
+    """Cache token positions from Nansen API (persists until manual reload)."""
     return nansen_client.get_token_positions(token_symbol, per_page=per_page, min_position_value=min_position_value)
 
 
@@ -165,7 +165,7 @@ def show_position_dialog(wallet_data: dict):
     with st.spinner("Loading positions..."):
         position_data = cached_get_wallet_positions(address)
 
-    st.caption("📦 **Cached 5 min** - Click Reload for latest")
+    st.caption("📦 **Cached** - Click Reload for latest")
 
     if position_data:
         col1, col2, col3, col4 = st.columns(4)
@@ -312,7 +312,7 @@ def render_smart_money_sidebar():
 
     loaded_tokens = len([k for k in st.session_state.keys() if k.startswith("loaded_")])
     if loaded_tokens > 0:
-        st.caption(f"📦 {loaded_tokens} tokens cached (10 min TTL)")
+        st.caption(f"📦 {loaded_tokens} tokens cached")
 
     st.divider()
     st.caption("Credit costs:")
