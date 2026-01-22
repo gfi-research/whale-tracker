@@ -112,13 +112,8 @@ def cached_get_open_orders(address: str):
     """Cache open orders from Hyperliquid API (persists until manual reload)."""
     try:
         hl_client = HyperliquidClient()
-        orders = hl_client.get_open_orders(address)
-        print(f"[DEBUG] Open orders for {address[:10]}...: {len(orders) if orders else 0} orders")
-        if orders:
-            print(f"[DEBUG] Sample order: {orders[0] if orders else 'None'}")
-        return orders if orders else []
-    except Exception as e:
-        print(f"[DEBUG] Error fetching open orders: {e}")
+        return hl_client.get_open_orders(address) or []
+    except Exception:
         return []
 
 
@@ -202,9 +197,9 @@ def show_position_dialog(wallet_data: dict):
                 coin = order.get('coin', '')
                 orders_by_coin[coin] = orders_by_coin.get(coin, 0) + 1
 
-            # Debug: Show total open orders count
-            if open_orders:
-                st.caption(f"📋 {len(open_orders)} open orders: {dict(orders_by_coin)}")
+            # Show pending orders summary
+            total_orders = len(open_orders) if open_orders else 0
+            st.caption(f"📋 {total_orders} pending limit orders" + (f": {dict(orders_by_coin)}" if orders_by_coin else ""))
 
             for pos_data in asset_positions:
                 pos = pos_data.get('position', {})
