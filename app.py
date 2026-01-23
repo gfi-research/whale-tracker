@@ -556,6 +556,32 @@ def render_smart_money_content():
             total_value = total_long_value + total_short_value
             long_pct = (total_long_value / max(total_value, 1)) * 100
 
+            # Calculate avg entry prices (weighted by position value)
+            avg_long_entry = 0
+            avg_short_entry = 0
+
+            # Get entry prices from wallet_data positions
+            long_entries = []
+            short_entries = []
+            for wd in all_wallet_data:
+                for pos in wd.get('positions', []):
+                    if pos.get('token') == token:
+                        entry = pos.get('entry_price', 0)
+                        value = pos.get('position_value', 0)
+                        if entry > 0 and value > 0:
+                            if pos.get('side') == 'Long':
+                                long_entries.append((entry, value))
+                            else:
+                                short_entries.append((entry, value))
+
+            # Weighted average entry price
+            if long_entries:
+                total_weight = sum(v for _, v in long_entries)
+                avg_long_entry = sum(e * v for e, v in long_entries) / max(total_weight, 1)
+            if short_entries:
+                total_weight = sum(v for _, v in short_entries)
+                avg_short_entry = sum(e * v for e, v in short_entries) / max(total_weight, 1)
+
             token_summary[token] = {
                 'long_value': total_long_value,
                 'short_value': total_short_value,
@@ -563,6 +589,8 @@ def render_smart_money_content():
                 'upnl': total_long_upnl + total_short_upnl,
                 'long_count': len(long_positions),
                 'short_count': len(short_positions),
+                'avg_long_entry': avg_long_entry,
+                'avg_short_entry': avg_short_entry,
             }
 
         # Count wallets in profit vs loss (by wallet, not by position)
@@ -575,6 +603,7 @@ def render_smart_money_content():
         total_long = sum(t['long_value'] for t in token_summary.values())
         total_short = sum(t['short_value'] for t in token_summary.values())
         overall_long_pct = (total_long / max(total_long + total_short, 1)) * 100
+        overall_short_pct = 100 - overall_long_pct
         # Use actual wallet count from wallet_df (229 wallets from wallet_address.txt)
         total_wallets = len(wallet_df)
         profit_pct = (profit_wallets / max(profit_wallets + loss_wallets, 1)) * 100
@@ -608,6 +637,18 @@ def render_smart_money_content():
             else:
                 return "Bearish", "#991b1b"
 
+        # Time filter for positioning analysis
+        time_filter_col, _ = st.columns([1, 4])
+        with time_filter_col:
+            time_filter = st.selectbox(
+                "Time Period",
+                ["All", "7D", "30D"],
+                key="positioning_time_filter",
+                help="Filter positions by time period (requires entry time data)"
+            )
+        if time_filter != "All":
+            st.caption(f"⚠️ {time_filter} filter shows current positions. Historical tracking coming soon.")
+
         # Layout: Left sidebar | Center chart | Right token cards
         col_left, col_center, col_right = st.columns([1, 2, 1.5])
 
@@ -640,10 +681,11 @@ def render_smart_money_content():
         with col_center:
             st.markdown("### Extremely Profitable Positioning")
             st.caption(f"Current positions - {sentiment}")
+            # Show dominant position (Long if Long > Short, else Short)
             if overall_long_pct >= 50:
                 st.markdown(f"## :green[{overall_long_pct:.1f}% Long]")
             else:
-                st.markdown(f"## :red[{overall_long_pct:.1f}% Long]")
+                st.markdown(f"## :red[{overall_short_pct:.1f}% Short]")
 
             # Stats
             stat_cols = st.columns(2)
@@ -662,8 +704,14 @@ def render_smart_money_content():
                 upnl = data['upnl']
                 upnl_str = f"+{format_currency(upnl, compact=True)}" if upnl >= 0 else format_currency(upnl, compact=True)
 
+                # Format avg entry prices
+                avg_long = data.get('avg_long_entry', 0)
+                avg_short = data.get('avg_short_entry', 0)
+                avg_long_str = f"${avg_long:,.2f}" if avg_long > 0 else "-"
+                avg_short_str = f"${avg_short:,.2f}" if avg_short > 0 else "-"
+
                 if idx < 2:
-                    # Larger cards for top 2
+                    # Larger cards for top 2 with avg entry
                     if idx == 0:
                         top_cols = st.columns(2)
                     with top_cols[idx]:
@@ -671,6 +719,8 @@ def render_smart_money_content():
                             st.success(f"**💎 {token}**\n\n{upnl_str} UPNL\n\n{sentiment_label}")
                         else:
                             st.error(f"**💎 {token}**\n\n{upnl_str} UPNL\n\n{sentiment_label}")
+                        # Show avg entry prices
+                        st.caption(f"Avg Long: {avg_long_str} | Avg Short: {avg_short_str}")
                 else:
                     # Smaller cards for rest
                     if idx == 2 or idx == 4 or idx == 6:
@@ -683,13 +733,14 @@ def render_smart_money_content():
                             st.warning(f"💎 **{token}** | {upnl_str} | {sentiment_label}")
                         else:
                             st.error(f"💎 **{token}** | {upnl_str} | {sentiment_label}")
+                        st.caption(f"L:{avg_long_str} S:{avg_short_str}")
     else:
         st.info("📊 No open positions found. Wallets may not have any active perp positions.")
 
     st.divider()
 
     # Tabs
-    tab1, tab2 = st.tabs(["📊 Whale Leaderboard", "📈 Token Positions"])
+    tab1, tab2, tab3 = st.tabs(["📊 Whale Leaderboard", "📈 Token Positions", "📅 Positions 7D/30D"])
 
     with tab1:
         st.subheader(f"Whale Traders ({len(wallet_df)} wallets from wallet_address.txt)")
@@ -873,6 +924,61 @@ def render_smart_money_content():
 
                 if len(positions) > 20:
                     st.caption(f"Showing 20 of {len(positions)} positions")
+
+    with tab3:
+        st.subheader("📅 Token Positions by Time Period")
+        st.caption("Compare whale positions across different time periods")
+
+        # Time period selector
+        period_col, _ = st.columns([1, 3])
+        with period_col:
+            period = st.radio("Select Period", ["7D", "30D"], horizontal=True, key="token_period_radio")
+
+        if token_summary:
+            st.markdown(f"### Position Summary ({period})")
+            st.info(f"⚠️ Showing current positions. Historical {period} tracking requires time-series data from API.")
+
+            # Create summary table
+            summary_data = []
+            for token, data in sorted(token_summary.items(), key=lambda x: x[1]['long_value'] + x[1]['short_value'], reverse=True)[:15]:
+                total_value = data['long_value'] + data['short_value']
+                summary_data.append({
+                    'Token': token,
+                    'Total Position': format_currency(total_value, compact=True),
+                    'Long Value': format_currency(data['long_value'], compact=True),
+                    'Short Value': format_currency(data['short_value'], compact=True),
+                    'Long %': f"{data['long_pct']:.1f}%",
+                    'UPNL': format_currency(data['upnl'], compact=True),
+                    'Avg Long Entry': f"${data.get('avg_long_entry', 0):,.2f}" if data.get('avg_long_entry', 0) > 0 else "-",
+                    'Avg Short Entry': f"${data.get('avg_short_entry', 0):,.2f}" if data.get('avg_short_entry', 0) > 0 else "-",
+                    'Long Traders': data['long_count'],
+                    'Short Traders': data['short_count'],
+                })
+
+            summary_df = pd.DataFrame(summary_data)
+            st.dataframe(summary_df, hide_index=True, use_container_width=True)
+
+            # Position changes section
+            st.markdown("### 📊 Position Analysis")
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.markdown("**Top Long Positions**")
+                long_sorted = sorted(token_summary.items(), key=lambda x: x[1]['long_value'], reverse=True)[:5]
+                for token, data in long_sorted:
+                    long_pct = data['long_pct']
+                    bias_icon = "🟢" if long_pct > 55 else "🟡" if long_pct > 45 else "🔴"
+                    st.markdown(f"{bias_icon} **{token}**: {format_currency(data['long_value'], compact=True)} ({data['long_count']} traders)")
+
+            with col2:
+                st.markdown("**Top Short Positions**")
+                short_sorted = sorted(token_summary.items(), key=lambda x: x[1]['short_value'], reverse=True)[:5]
+                for token, data in short_sorted:
+                    short_pct = 100 - data['long_pct']
+                    bias_icon = "🔴" if short_pct > 55 else "🟡" if short_pct > 45 else "🟢"
+                    st.markdown(f"{bias_icon} **{token}**: {format_currency(data['short_value'], compact=True)} ({data['short_count']} traders)")
+        else:
+            st.info("📊 Load whale positions first to see time-based analysis.")
 
     # Footer
     st.markdown("---")
