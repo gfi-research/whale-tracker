@@ -1,6 +1,6 @@
 """
 Whale Tracker Dashboard - Multi-Dashboard App
-Combines Smart Money (Nansen API) + Whale Screener (Hyperliquid API)
+Smart Money + Whale Screener - powered by Hyperliquid API (100% Free)
 """
 
 import streamlit as st
@@ -12,9 +12,6 @@ import time
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-# Nansen imports
-# NansenClient no longer needed - using Hyperliquid API (free, real-time)
-# from nansen_client import NansenClient, get_usage_tracker, reset_usage_tracker
 from utils import (
     calculate_perp_bias,
     calculate_size_cohort,
