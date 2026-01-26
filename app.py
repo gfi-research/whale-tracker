@@ -13,7 +13,8 @@ from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Nansen imports
-from nansen_client import NansenClient, get_usage_tracker, reset_usage_tracker
+# NansenClient no longer needed - using BigQuery API
+# from nansen_client import NansenClient, get_usage_tracker, reset_usage_tracker
 from utils import (
     calculate_perp_bias,
     calculate_size_cohort,
@@ -89,14 +90,8 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 
-# ==================== SMART MONEY (NANSEN) DASHBOARD ====================
-
-@st.cache_resource
-def get_nansen_client():
-    return NansenClient()
-
-nansen_client = get_nansen_client()
-
+# ==================== SMART MONEY (BIGQUERY) DASHBOARD ====================
+# All data now comes from BigQuery API - no direct Nansen API calls
 
 # ==================== BIGQUERY API ENDPOINT ====================
 WHALE_POSITIONS_API = "https://whale-position-1094890588015.asia-southeast1.run.app/"
@@ -118,12 +113,6 @@ def fetch_whale_positions_from_api():
 
 # ==================== PERSISTENT CACHING ====================
 # Cache persists until user manually clicks Reload/Fetch button
-
-@st.cache_data(show_spinner=False)
-def cached_get_wallet_positions(address: str):
-    """Cache wallet positions from Nansen API (persists until manual reload)."""
-    return nansen_client.get_wallet_positions(address)
-
 
 @st.cache_data(show_spinner=False)
 def cached_get_open_orders(address: str):
@@ -155,10 +144,71 @@ def cached_get_user_fills(address: str, start_time: datetime, end_time: datetime
         return []
 
 
-@st.cache_data(show_spinner=False)
-def cached_get_token_positions(token_symbol: str, per_page: int = 100, min_position_value: float = 10000):
-    """Cache token positions from Nansen API (persists until manual reload)."""
-    return nansen_client.get_token_positions(token_symbol, per_page=per_page, min_position_value=min_position_value)
+def get_wallet_positions_from_cache(address: str) -> dict:
+    """Get wallet positions from cached BigQuery data (no API call)."""
+    if 'wallet_positions_map' not in st.session_state:
+        return None
+
+    addr_lower = address.lower()
+    wallet_data = st.session_state.wallet_positions_map.get(addr_lower)
+
+    if not wallet_data:
+        return None
+
+    # Transform to expected format for dialog
+    positions = wallet_data.get('positions', [])
+
+    return {
+        'margin_summary_account_value_usd': wallet_data.get('account_value'),
+        'margin_summary_total_margin_used_usd': wallet_data.get('total_margin_used'),
+        'withdrawable_usd': wallet_data.get('withdrawable'),
+        'margin_summary_total_net_liquidation_position_usd': wallet_data.get('net_liquidation'),
+        'asset_positions': [
+            {
+                'position': {
+                    'token_symbol': p.get('token_symbol'),
+                    'size': p.get('position_size'),
+                    'position_value_usd': p.get('position_value_usd'),
+                    'unrealized_pnl_usd': p.get('unrealized_pnl_usd'),
+                    'entry_price_usd': p.get('entry_price_usd'),
+                    'liquidation_price_usd': p.get('liquidation_price_usd'),
+                    'leverage_value': p.get('leverage_value'),
+                    'leverage_type': p.get('leverage_type'),
+                    'return_on_equity': p.get('return_on_equity'),
+                    'margin_used_usd': p.get('margin_used_usd'),
+                }
+            }
+            for p in positions if p.get('token_symbol')
+        ]
+    }
+
+
+def get_token_positions_from_cache(token_symbol: str) -> list:
+    """Get token positions from cached BigQuery data (no API call)."""
+    if 'raw_positions' not in st.session_state:
+        return []
+
+    wallet_labels = st.session_state.get('wallet_labels', {})
+    positions = []
+
+    for pos in st.session_state.raw_positions:
+        if pos.get('token_symbol') == token_symbol:
+            addr = pos.get('wallet_address', '').lower()
+            side = pos.get('position_side', 'Long')
+            leverage = pos.get('leverage_value') or 1
+
+            positions.append({
+                'address': addr,
+                'address_label': wallet_labels.get(addr, truncate_address(addr)),
+                'side': side,
+                'position_value_usd': pos.get('position_value_usd'),
+                'leverage': f"{leverage}X",
+                'upnl_usd': pos.get('unrealized_pnl_usd'),
+            })
+
+    # Sort by position value descending
+    positions.sort(key=lambda x: float(x.get('position_value_usd') or 0), reverse=True)
+    return positions
 
 
 @st.dialog("Position Details", width="large")
@@ -173,17 +223,16 @@ def show_position_dialog(wallet_data: dict):
     with col_addr:
         st.caption(f"`{address}`")
     with col_reload:
-        if st.button("🔄 Reload", key=f"reload_{address}", help="Fetch latest data"):
-            # Clear persistent cache for this address
-            cached_get_wallet_positions.clear()
+        if st.button("🔄 Reload", key=f"reload_{address}", help="Reload all data from BigQuery"):
+            # Clear BigQuery cache and open orders cache
+            fetch_whale_positions_from_api.clear()
             cached_get_open_orders.clear()
             st.rerun()
 
-    # Use persistent cache (survives tab switches)
-    with st.spinner("Loading positions..."):
-        position_data = cached_get_wallet_positions(address)
+    # Use BigQuery cached data (no API call)
+    position_data = get_wallet_positions_from_cache(address)
 
-    st.caption("📦 **Cached** - Click Reload for latest")
+    st.caption("📦 **BigQuery Cache** - Free data")
 
     if position_data:
         col1, col2, col3, col4 = st.columns(4)
@@ -277,10 +326,9 @@ def show_position_dialog(wallet_data: dict):
         else:
             st.info("No open positions")
     else:
-        st.error("Failed to fetch position data from API")
+        st.warning("No cached position data found. Try reloading data.")
 
-    tracker = get_usage_tracker()
-    st.caption(f"💰 Session total: {tracker.total_credits_used} credits")
+    st.caption("📦 Data from BigQuery (Free)")
 
 
 def render_smart_money_sidebar():
@@ -301,29 +349,20 @@ def render_smart_money_sidebar():
     st.divider()
 
     # Cache management
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("🔄 Reset"):
-            reset_usage_tracker()
-            st.rerun()
-    with col2:
-        if st.button("🗑️ Clear"):
-            # Clear session state flags
-            keys_to_delete = [k for k in st.session_state.keys() if k.startswith("positions_") or k.startswith("token_positions_") or k.startswith("loaded_")]
-            for k in keys_to_delete:
-                del st.session_state[k]
-            # Clear persistent cache
-            st.cache_data.clear()
-            st.rerun()
-
-    loaded_tokens = len([k for k in st.session_state.keys() if k.startswith("loaded_")])
-    if loaded_tokens > 0:
-        st.caption(f"📦 {loaded_tokens} tokens cached")
+    if st.button("🗑️ Clear All Cache"):
+        # Clear session state flags
+        keys_to_delete = [k for k in st.session_state.keys() if k.startswith("positions_") or k.startswith("token_positions_") or k.startswith("loaded_") or k in ['raw_positions', 'wallet_positions_map', 'wallet_labels']]
+        for k in keys_to_delete:
+            del st.session_state[k]
+        # Clear persistent cache
+        st.cache_data.clear()
+        st.rerun()
 
     st.divider()
-    st.caption("Data updates via Cloud Run Job")
-    st.caption("• Auto-sync from BigQuery")
-    st.caption("• No API credits needed")
+    st.caption("📦 **100% Free Data**")
+    st.caption("• Cloud Run Job syncs data")
+    st.caption("• No Nansen API credits used")
+    st.caption("• Data from BigQuery cache")
 
 
 def render_smart_money_content():
@@ -342,10 +381,13 @@ def render_smart_money_content():
 
     wallet_labels = load_whale_wallet_labels()
 
+    # Store wallet_labels in session state for helper functions
+    st.session_state['wallet_labels'] = wallet_labels
+
     # Fetch data from BigQuery API (cost-free)
     col_title, col_reload = st.columns([4, 1])
     with col_title:
-        st.caption("📊 Data loaded from BigQuery API")
+        st.caption("📊 Data loaded from BigQuery API (Free)")
     with col_reload:
         if st.button("🔄 Reload", key="reload_whale_data"):
             fetch_whale_positions_from_api.clear()
@@ -357,6 +399,9 @@ def render_smart_money_content():
     if not raw_positions:
         st.error("Failed to load whale positions from API")
         st.stop()
+
+    # Store raw_positions in session state for helper functions
+    st.session_state['raw_positions'] = raw_positions
 
     # Transform API data to expected format
     all_wallet_data = []
@@ -370,9 +415,15 @@ def render_smart_money_content():
             wallet_positions_map[addr] = {
                 'positions': [],
                 'account_value': pos.get('account_value_usd') or 0,
+                'total_margin_used': pos.get('total_margin_used_usd') or 0,
+                'withdrawable': pos.get('withdrawable_usd') or 0,
+                'net_liquidation': pos.get('net_liquidation_position_usd') or 0,
             }
         if pos.get('token_symbol'):  # Only add if has position
             wallet_positions_map[addr]['positions'].append(pos)
+
+    # Store wallet_positions_map in session state for helper functions
+    st.session_state['wallet_positions_map'] = wallet_positions_map
 
     # Build all_wallet_data and all_positions
     for address, data in wallet_positions_map.items():
@@ -715,15 +766,11 @@ def render_smart_money_content():
 
         col_title, col_reload = st.columns([4, 1])
         with col_title:
-            st.caption("Click on token to expand positions")
+            st.caption("📦 Data from BigQuery (free) - Click token to expand")
         with col_reload:
             if st.button("🔄 Reload All", key="reload_all_tokens"):
-                # Clear loaded flags
-                keys_to_delete = [k for k in st.session_state.keys() if k.startswith("loaded_")]
-                for k in keys_to_delete:
-                    del st.session_state[k]
-                # Clear persistent cache for token positions
-                cached_get_token_positions.clear()
+                # Clear BigQuery cache
+                fetch_whale_positions_from_api.clear()
                 st.rerun()
 
         # Get tokens from token_summary (sorted by UPNL), fallback to default list
@@ -734,17 +781,8 @@ def render_smart_money_content():
             tokens = ["BTC", "ETH", "SOL", "ARB", "DOGE", "AVAX", "LINK", "OP", "APT", "SUI"]
 
         for token in tokens:
-            # Check session state for UI state (whether user has loaded this token)
-            loaded_key = f"loaded_{token}"
-            is_loaded = st.session_state.get(loaded_key, False)
-            positions = None
-
-            if is_loaded:
-                # Use persistent cache (survives tab switches)
-                positions = cached_get_token_positions(token)
-                is_cached = True
-            else:
-                is_cached = False
+            # Get positions from BigQuery cache (no API call)
+            positions = get_token_positions_from_cache(token)
 
             if positions:
                 long_positions = [p for p in positions if p.get('side') == 'Long']
@@ -754,8 +792,7 @@ def render_smart_money_content():
                 total_value = total_long + total_short
                 ratio = total_long / max(total_value, 1) * 100
                 bias_icon = "🟢" if ratio > 55 else "🔴" if ratio < 45 else "⚪"
-                cache_icon = "📦" if is_cached else ""
-                title = f"{token} | {format_currency(total_value, compact=True)} | {bias_icon} L:{ratio:.0f}% {cache_icon}"
+                title = f"{token} | {format_currency(total_value, compact=True)} | {bias_icon} L:{ratio:.0f}% 📦"
             elif token in token_summary:
                 # Use token_summary data to show UPNL and sentiment
                 ts = token_summary[token]
@@ -779,13 +816,9 @@ def render_smart_money_content():
 
             with st.expander(title, expanded=False):
                 if not positions:
-                    with st.spinner(f"Loading {token} positions..."):
-                        positions = cached_get_token_positions(token)
-                    if positions:
-                        st.session_state[loaded_key] = True
-                    else:
-                        st.warning(f"No positions found for {token}")
-                        continue
+                    # No positions for this token in BigQuery data
+                    st.info(f"No positions found for {token} in cached data")
+                    continue
 
                 long_positions = [p for p in positions if p.get('side') == 'Long']
                 short_positions = [p for p in positions if p.get('side') == 'Short']
@@ -802,7 +835,7 @@ def render_smart_money_content():
                     bias = "Bullish" if ratio > 55 else "Bearish" if ratio < 45 else "Neutral"
                     st.metric("Long %", f"{ratio:.1f}%", bias)
                 with col4:
-                    st.metric("Status", "📦 Cached" if is_cached else "🔴 Live")
+                    st.metric("Status", "📦 BigQuery")
 
                 st.divider()
 
@@ -904,8 +937,7 @@ def render_smart_money_content():
 
     # Footer
     st.markdown("---")
-    tracker = get_usage_tracker()
-    st.markdown(f"Data: [Nansen](https://nansen.ai) | Session: **{tracker.total_credits_used}** credits | Built with Streamlit")
+    st.markdown("Data: [Nansen](https://nansen.ai) via BigQuery | 📦 **Free** (No API credits) | Built with Streamlit")
 
 
 # ==================== WHALE SCREENER (HYPERLIQUID) DASHBOARD ====================
