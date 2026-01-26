@@ -98,6 +98,24 @@ def get_nansen_client():
 nansen_client = get_nansen_client()
 
 
+# ==================== BIGQUERY API ENDPOINT ====================
+WHALE_POSITIONS_API = "https://whale-position-1094890588015.asia-southeast1.run.app/"
+
+
+@st.cache_data(show_spinner=False)
+def fetch_whale_positions_from_api():
+    """Fetch all whale positions from BigQuery API (cost-free, pre-cached data)."""
+    import requests
+    try:
+        response = requests.get(WHALE_POSITIONS_API, timeout=30)
+        response.raise_for_status()
+        data = response.json()
+        return data.get('data', [])
+    except Exception as e:
+        st.error(f"Failed to fetch whale positions: {e}")
+        return []
+
+
 # ==================== PERSISTENT CACHING ====================
 # Cache persists until user manually clicks Reload/Fetch button
 
@@ -267,35 +285,22 @@ def show_position_dialog(wallet_data: dict):
 
 def render_smart_money_sidebar():
     """Render Smart Money sidebar"""
-    st.header("📊 API Usage")
-    tracker = get_usage_tracker()
-    summary = tracker.get_summary()
+    st.header("📊 Data Source")
 
-    st.metric("Credits Used", summary['total_credits_used'])
-    st.metric("API Calls", summary['total_calls'])
-    st.metric("Success Rate", f"{(summary['successful_calls'] / max(summary['total_calls'], 1)) * 100:.0f}%")
-
-    if summary['total_calls'] > 0:
-        st.metric("Avg Response", f"{summary['avg_response_time_ms']:.0f}ms")
+    # BigQuery API status
+    st.success("✅ BigQuery API")
+    st.caption("Cost-free data from Cloud Run")
 
     st.divider()
 
-    # Show whale data status
-    if st.session_state.get('whale_positions_loaded', False):
-        whale_count = len(st.session_state.get('whale_wallet_data', []))
-        st.success(f"✅ {whale_count} whales loaded")
-
-        if st.button("🔄 Refetch All Whales", type="secondary"):
-            st.session_state.whale_positions_loaded = False
-            st.session_state.whale_wallet_data = []
-            st.session_state.whale_all_positions = []
-            reset_usage_tracker()
-            st.rerun()
-    else:
-        st.warning("⏳ Whale data not loaded")
+    # Reload button
+    if st.button("🔄 Reload Data", type="primary"):
+        fetch_whale_positions_from_api.clear()
+        st.rerun()
 
     st.divider()
 
+    # Cache management
     col1, col2 = st.columns(2)
     with col1:
         if st.button("🔄 Reset"):
@@ -316,197 +321,114 @@ def render_smart_money_sidebar():
         st.caption(f"📦 {loaded_tokens} tokens cached")
 
     st.divider()
-    st.caption("Credit costs:")
-    st.caption("• Wallet position: 1")
-    st.caption("• Full fetch (229): ~229")
+    st.caption("Data updates via Cloud Run Job")
+    st.caption("• Auto-sync from BigQuery")
+    st.caption("• No API credits needed")
 
 
 def render_smart_money_content():
     """Render Smart Money main content"""
     st.title("💰 Smart Money on Hyper")
-    st.caption("Track smart money positions on Hyperliquid | Powered by Nansen API")
+    st.caption("Track smart money positions on Hyperliquid | Data from BigQuery (cost-free)")
 
-    # Load wallet addresses from wallet_address.txt (229 wallets)
-    def load_whale_wallet_list():
-        """Load wallet list from wallet_address.txt"""
+    # Load wallet labels from wallet_address.txt for display names
+    def load_whale_wallet_labels():
+        """Load wallet labels from wallet_address.txt"""
         csv_path = Path(__file__).parent / "wallet_address.txt"
         if csv_path.exists():
             df = pd.read_csv(csv_path)
-            return df
-        return None
+            return dict(zip(df['trader_address'].str.lower(), df['trader_address_label']))
+        return {}
 
-    whale_list = load_whale_wallet_list()
-    if whale_list is None:
-        st.error("Failed to load wallet_address.txt")
+    wallet_labels = load_whale_wallet_labels()
+
+    # Fetch data from BigQuery API (cost-free)
+    col_title, col_reload = st.columns([4, 1])
+    with col_title:
+        st.caption("📊 Data loaded from BigQuery API")
+    with col_reload:
+        if st.button("🔄 Reload", key="reload_whale_data"):
+            fetch_whale_positions_from_api.clear()
+            st.rerun()
+
+    with st.spinner("Loading whale positions from BigQuery..."):
+        raw_positions = fetch_whale_positions_from_api()
+
+    if not raw_positions:
+        st.error("Failed to load whale positions from API")
         st.stop()
 
-    # Fetch positions for all wallets from wallet_address.txt
-    @st.cache_data(ttl=600, show_spinner=False)
-    def fetch_all_whale_positions(_wallet_addresses: tuple):
-        """Fetch positions for all 229 wallets - costs 229 credits"""
-        all_wallet_data = []
-        all_positions = []
+    # Transform API data to expected format
+    all_wallet_data = []
+    all_positions = []
 
-        for address, label in _wallet_addresses:
-            position_data = nansen_client.get_wallet_positions(address)
+    # Group positions by wallet
+    wallet_positions_map = {}
+    for pos in raw_positions:
+        addr = pos.get('wallet_address', '').lower()
+        if addr not in wallet_positions_map:
+            wallet_positions_map[addr] = {
+                'positions': [],
+                'account_value': pos.get('account_value_usd') or 0,
+            }
+        if pos.get('token_symbol'):  # Only add if has position
+            wallet_positions_map[addr]['positions'].append(pos)
 
-            if position_data:
-                account_value = float(position_data.get('margin_summary_account_value_usd') or 0)
-                total_margin = float(position_data.get('margin_summary_total_margin_used_usd') or 0)
+    # Build all_wallet_data and all_positions
+    for address, data in wallet_positions_map.items():
+        label = wallet_labels.get(address, truncate_address(address))
+        account_value = float(data['account_value'] or 0)
+        positions = data['positions']
 
-                asset_positions = position_data.get('asset_positions', [])
-                wallet_positions = []
-                wallet_upnl = 0
-                wallet_position_value = 0
+        wallet_positions = []
+        wallet_upnl = 0
+        wallet_position_value = 0
 
-                for pos_data in asset_positions:
-                    pos = pos_data.get('position', {})
-                    token = pos.get('token_symbol', 'Unknown')
-                    size = float(pos.get('size') or 0)
-                    position_value = float(pos.get('position_value_usd') or 0)
-                    upnl = float(pos.get('unrealized_pnl_usd') or 0)
-                    leverage = float(pos.get('leverage_value') or 1)
-                    entry_price = float(pos.get('entry_price_usd') or 0)
+        for pos in positions:
+            token = pos.get('token_symbol', 'Unknown')
+            side = pos.get('position_side', 'Long')
+            position_value = float(pos.get('position_value_usd') or 0)
+            upnl = float(pos.get('unrealized_pnl_usd') or 0)
+            leverage = float(pos.get('leverage_value') or 1)
+            entry_price = float(pos.get('entry_price_usd') or 0)
 
-                    side = "Long" if size > 0 else "Short"
+            wallet_positions.append({
+                'token': token,
+                'side': side,
+                'position_value': position_value,
+                'upnl': upnl,
+                'leverage': leverage,
+                'entry_price': entry_price,
+            })
 
-                    wallet_positions.append({
-                        'token': token,
-                        'side': side,
-                        'size': abs(size),
-                        'position_value': position_value,
-                        'upnl': upnl,
-                        'leverage': leverage,
-                        'entry_price': entry_price,
-                    })
+            all_positions.append({
+                'address': address,
+                'label': label,
+                'token': token,
+                'side': side,
+                'position_value': position_value,
+                'upnl': upnl,
+            })
 
-                    all_positions.append({
-                        'address': address,
-                        'label': label,
-                        'token': token,
-                        'side': side,
-                        'position_value': position_value,
-                        'upnl': upnl,
-                    })
+            wallet_upnl += upnl
+            wallet_position_value += position_value
 
-                    wallet_upnl += upnl
-                    wallet_position_value += position_value
+        # Calculate wallet leverage
+        wallet_leverage = wallet_position_value / max(account_value, 1) if account_value > 0 else 0
 
-                # Calculate wallet leverage
-                wallet_leverage = wallet_position_value / max(account_value, 1) if account_value > 0 else 0
-
-                all_wallet_data.append({
-                    'address': address,
-                    'label': label,
-                    'account_value': account_value,
-                    'position_value': wallet_position_value,
-                    'leverage': wallet_leverage,
-                    'total_pnl': wallet_upnl,
-                    'positions': wallet_positions,
-                    'position_count': len(wallet_positions),
-                })
-
-        return all_wallet_data, all_positions
-
-    # Convert to tuple for caching (list is not hashable)
-    wallet_addresses = tuple(
-        (row['trader_address'], row['trader_address_label'])
-        for _, row in whale_list.iterrows()
-    )
-
-    # Check if we need to fetch (button or first load)
-    if 'whale_positions_loaded' not in st.session_state:
-        st.session_state.whale_positions_loaded = False
-
-    # Show fetch button if not loaded
-    if not st.session_state.whale_positions_loaded:
-        st.warning(f"📊 Ready to fetch positions for **{len(wallet_addresses)} wallets** from wallet_address.txt")
-        st.caption(f"⚠️ This will cost approximately **{len(wallet_addresses)} credits** (1 credit per wallet)")
-
-        if st.button("🚀 Fetch All Whale Positions", type="primary"):
-            with st.spinner(f"Fetching positions for {len(wallet_addresses)} wallets... (this may take a while)"):
-                progress_bar = st.progress(0)
-                status_text = st.empty()
-
-                # Fetch with progress tracking
-                all_wallet_data = []
-                all_positions = []
-
-                for idx, (address, label) in enumerate(wallet_addresses):
-                    position_data = nansen_client.get_wallet_positions(address)
-
-                    if position_data:
-                        account_value = float(position_data.get('margin_summary_account_value_usd') or 0)
-                        asset_positions = position_data.get('asset_positions', [])
-                        wallet_upnl = 0
-                        wallet_position_value = 0
-                        wallet_positions = []
-
-                        for pos_data in asset_positions:
-                            pos = pos_data.get('position', {})
-                            token = pos.get('token_symbol', 'Unknown')
-                            size = float(pos.get('size') or 0)
-                            position_value = float(pos.get('position_value_usd') or 0)
-                            upnl = float(pos.get('unrealized_pnl_usd') or 0)
-                            leverage = float(pos.get('leverage_value') or 1)
-
-                            side = "Long" if size > 0 else "Short"
-
-                            wallet_positions.append({
-                                'token': token,
-                                'side': side,
-                                'position_value': position_value,
-                                'upnl': upnl,
-                                'leverage': leverage,
-                            })
-
-                            all_positions.append({
-                                'address': address,
-                                'label': label,
-                                'token': token,
-                                'side': side,
-                                'position_value': position_value,
-                                'upnl': upnl,
-                            })
-
-                            wallet_upnl += upnl
-                            wallet_position_value += position_value
-
-                        wallet_leverage = wallet_position_value / max(account_value, 1) if account_value > 0 else 0
-
-                        all_wallet_data.append({
-                            'address': address,
-                            'label': label,
-                            'account_value': account_value,
-                            'position_value': wallet_position_value,
-                            'leverage': wallet_leverage,
-                            'total_pnl': wallet_upnl,
-                            'positions': wallet_positions,
-                            'position_count': len(wallet_positions),
-                        })
-
-                    progress_bar.progress((idx + 1) / len(wallet_addresses))
-                    status_text.text(f"Fetched {idx + 1}/{len(wallet_addresses)} wallets...")
-
-                progress_bar.empty()
-                status_text.empty()
-
-                st.session_state.whale_wallet_data = all_wallet_data
-                st.session_state.whale_all_positions = all_positions
-                st.session_state.whale_positions_loaded = True
-                st.rerun()
-
-        st.stop()
-
-    # Get cached data
-    all_wallet_data = st.session_state.get('whale_wallet_data', [])
-    all_positions = st.session_state.get('whale_all_positions', [])
+        all_wallet_data.append({
+            'address': address,
+            'label': label,
+            'account_value': account_value,
+            'position_value': wallet_position_value,
+            'leverage': wallet_leverage,
+            'total_pnl': wallet_upnl,
+            'positions': wallet_positions,
+            'position_count': len(wallet_positions),
+        })
 
     if not all_wallet_data:
-        st.error("No wallet data loaded. Please fetch again.")
-        if st.button("🔄 Reset and Fetch Again"):
-            st.session_state.whale_positions_loaded = False
-            st.rerun()
+        st.error("No wallet data loaded.")
         st.stop()
 
     # Create DataFrame from fetched data
