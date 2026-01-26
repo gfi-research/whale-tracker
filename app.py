@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Nansen imports
-# NansenClient no longer needed - using BigQuery API
+# NansenClient no longer needed - using Hyperliquid API (free, real-time)
 # from nansen_client import NansenClient, get_usage_tracker, reset_usage_tracker
 from utils import (
     calculate_perp_bias,
@@ -90,25 +90,51 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 
-# ==================== SMART MONEY (BIGQUERY) DASHBOARD ====================
-# All data now comes from BigQuery API - no direct Nansen API calls
+# ==================== SMART MONEY (HYPERLIQUID) DASHBOARD ====================
+# All data now comes from Hyperliquid API - FREE, real-time data
 
-# ==================== BIGQUERY API ENDPOINT ====================
-WHALE_POSITIONS_API = "https://whale-position-1094890588015.asia-southeast1.run.app/"
+# ==================== HYPERLIQUID API ====================
 
+def fetch_all_whale_positions(wallet_addresses: list, progress_callback=None) -> list:
+    """
+    Fetch positions for all whale wallets from Hyperliquid API.
+    Uses clearinghouseState endpoint - FREE, no API credits needed.
+    """
+    hl_client = HyperliquidClient()
+    all_positions = []
+    total = len(wallet_addresses)
 
-@st.cache_data(show_spinner=False)
-def fetch_whale_positions_from_api():
-    """Fetch all whale positions from BigQuery API (cost-free, pre-cached data)."""
-    import requests
-    try:
-        response = requests.get(WHALE_POSITIONS_API, timeout=30)
-        response.raise_for_status()
-        data = response.json()
-        return data.get('data', [])
-    except Exception as e:
-        st.error(f"Failed to fetch whale positions: {e}")
-        return []
+    for idx, address in enumerate(wallet_addresses):
+        try:
+            wallet_data = hl_client.get_all_positions(address)
+            if wallet_data and wallet_data.get('positions'):
+                for pos in wallet_data['positions']:
+                    all_positions.append({
+                        'wallet_address': address.lower(),
+                        'account_value_usd': wallet_data['account_value_usd'],
+                        'total_margin_used_usd': wallet_data['total_margin_used_usd'],
+                        'withdrawable_usd': wallet_data['withdrawable_usd'],
+                        **pos
+                    })
+            elif wallet_data:
+                # Wallet exists but no positions
+                all_positions.append({
+                    'wallet_address': address.lower(),
+                    'account_value_usd': wallet_data['account_value_usd'],
+                    'total_margin_used_usd': wallet_data['total_margin_used_usd'],
+                    'withdrawable_usd': wallet_data['withdrawable_usd'],
+                    'token_symbol': None,
+                    'position_side': None,
+                    'position_value_usd': 0,
+                    'unrealized_pnl_usd': 0,
+                })
+        except Exception as e:
+            print(f"Error fetching {address}: {e}")
+
+        if progress_callback:
+            progress_callback(idx + 1, total)
+
+    return all_positions
 
 
 # ==================== PERSISTENT CACHING ====================
@@ -144,8 +170,47 @@ def cached_get_user_fills(address: str, start_time: datetime, end_time: datetime
         return []
 
 
-def get_wallet_positions_from_cache(address: str) -> dict:
-    """Get wallet positions from cached BigQuery data (no API call)."""
+@st.cache_data(show_spinner=False, ttl=300)  # Cache for 5 minutes
+def cached_get_wallet_positions(address: str) -> dict:
+    """Get wallet positions from Hyperliquid API (cached for 5 min)."""
+    try:
+        hl_client = HyperliquidClient()
+        wallet_data = hl_client.get_all_positions(address)
+        if not wallet_data:
+            return None
+
+        positions = wallet_data.get('positions', [])
+
+        return {
+            'margin_summary_account_value_usd': wallet_data.get('account_value_usd'),
+            'margin_summary_total_margin_used_usd': wallet_data.get('total_margin_used_usd'),
+            'withdrawable_usd': wallet_data.get('withdrawable_usd'),
+            'margin_summary_total_net_liquidation_position_usd': wallet_data.get('account_value_usd'),
+            'asset_positions': [
+                {
+                    'position': {
+                        'token_symbol': p.get('token_symbol'),
+                        'size': p.get('position_size'),
+                        'position_value_usd': p.get('position_value_usd'),
+                        'unrealized_pnl_usd': p.get('unrealized_pnl_usd'),
+                        'entry_price_usd': p.get('entry_price_usd'),
+                        'liquidation_price_usd': p.get('liquidation_price_usd'),
+                        'leverage_value': p.get('leverage_value'),
+                        'leverage_type': p.get('leverage_type'),
+                        'return_on_equity': p.get('return_on_equity'),
+                        'margin_used_usd': p.get('margin_used_usd'),
+                    }
+                }
+                for p in positions if p.get('token_symbol')
+            ]
+        }
+    except Exception as e:
+        print(f"Error fetching wallet positions: {e}")
+        return None
+
+
+def get_wallet_positions_from_session(address: str) -> dict:
+    """Get wallet positions from session state cache."""
     if 'wallet_positions_map' not in st.session_state:
         return None
 
@@ -155,7 +220,6 @@ def get_wallet_positions_from_cache(address: str) -> dict:
     if not wallet_data:
         return None
 
-    # Transform to expected format for dialog
     positions = wallet_data.get('positions', [])
 
     return {
@@ -184,7 +248,7 @@ def get_wallet_positions_from_cache(address: str) -> dict:
 
 
 def get_token_positions_from_cache(token_symbol: str) -> list:
-    """Get token positions from cached BigQuery data (no API call)."""
+    """Get token positions from session cache (Hyperliquid data)."""
     if 'raw_positions' not in st.session_state:
         return []
 
@@ -223,16 +287,23 @@ def show_position_dialog(wallet_data: dict):
     with col_addr:
         st.caption(f"`{address}`")
     with col_reload:
-        if st.button("🔄 Reload", key=f"reload_{address}", help="Reload all data from BigQuery"):
-            # Clear BigQuery cache and open orders cache
-            fetch_whale_positions_from_api.clear()
+        if st.button("🔄 Reload", key=f"reload_{address}", help="Fetch real-time data"):
+            # Clear caches
+            cached_get_wallet_positions.clear()
             cached_get_open_orders.clear()
             st.rerun()
 
-    # Use BigQuery cached data (no API call)
-    position_data = get_wallet_positions_from_cache(address)
+    # Try session cache first, then fetch from Hyperliquid API
+    position_data = get_wallet_positions_from_session(address)
+    data_source = "Session Cache"
 
-    st.caption("📦 **BigQuery Cache** - Free data")
+    if not position_data:
+        # Fetch real-time from Hyperliquid API
+        with st.spinner("Fetching real-time data..."):
+            position_data = cached_get_wallet_positions(address)
+        data_source = "Hyperliquid API"
+
+    st.caption(f"📦 **{data_source}** - Free data")
 
     if position_data:
         col1, col2, col3, col4 = st.columns(4)
@@ -326,24 +397,29 @@ def show_position_dialog(wallet_data: dict):
         else:
             st.info("No open positions")
     else:
-        st.warning("No cached position data found. Try reloading data.")
+        st.warning("No position data found. Try clicking Reload.")
 
-    st.caption("📦 Data from BigQuery (Free)")
+    st.caption("📦 Hyperliquid API (Free)")
 
 
 def render_smart_money_sidebar():
     """Render Smart Money sidebar"""
     st.header("📊 Data Source")
 
-    # BigQuery API status
-    st.success("✅ BigQuery API")
-    st.caption("Cost-free data from Cloud Run")
+    # Hyperliquid API status
+    st.success("✅ Hyperliquid API")
+    st.caption("Real-time data, 100% free")
 
     st.divider()
 
     # Reload button
     if st.button("🔄 Reload Data", type="primary"):
-        fetch_whale_positions_from_api.clear()
+        # Clear session state
+        if 'raw_positions' in st.session_state:
+            del st.session_state['raw_positions']
+        if 'wallet_positions_map' in st.session_state:
+            del st.session_state['wallet_positions_map']
+        cached_get_wallet_positions.clear()
         st.rerun()
 
     st.divider()
@@ -360,48 +436,85 @@ def render_smart_money_sidebar():
 
     st.divider()
     st.caption("📦 **100% Free Data**")
-    st.caption("• Cloud Run Job syncs data")
-    st.caption("• No Nansen API credits used")
-    st.caption("• Data from BigQuery cache")
+    st.caption("• Hyperliquid API (real-time)")
+    st.caption("• No API credits needed")
+    st.caption("• Click Fetch to load data")
 
 
 def render_smart_money_content():
     """Render Smart Money main content"""
     st.title("💰 Smart Money on Hyper")
-    st.caption("Track smart money positions on Hyperliquid | Data from BigQuery (cost-free)")
+    st.caption("Track smart money positions on Hyperliquid | Real-time data (FREE)")
 
-    # Load wallet labels from wallet_address.txt for display names
-    def load_whale_wallet_labels():
-        """Load wallet labels from wallet_address.txt"""
+    # Load wallet addresses and labels from wallet_address.txt
+    def load_whale_wallets():
+        """Load wallet addresses and labels from wallet_address.txt"""
         csv_path = Path(__file__).parent / "wallet_address.txt"
         if csv_path.exists():
             df = pd.read_csv(csv_path)
-            return dict(zip(df['trader_address'].str.lower(), df['trader_address_label']))
-        return {}
+            addresses = df['trader_address'].tolist()
+            labels = dict(zip(df['trader_address'].str.lower(), df['trader_address_label']))
+            return addresses, labels
+        return [], {}
 
-    wallet_labels = load_whale_wallet_labels()
+    wallet_addresses, wallet_labels = load_whale_wallets()
 
     # Store wallet_labels in session state for helper functions
     st.session_state['wallet_labels'] = wallet_labels
 
-    # Fetch data from BigQuery API (cost-free)
-    col_title, col_reload = st.columns([4, 1])
+    # Fetch controls
+    col_title, col_fetch, col_reload = st.columns([3, 1, 1])
     with col_title:
-        st.caption("📊 Data loaded from BigQuery API (Free)")
+        if 'raw_positions' in st.session_state and st.session_state['raw_positions']:
+            st.caption(f"📊 {len(st.session_state.get('wallet_positions_map', {}))} wallets loaded (Hyperliquid API - Free)")
+        else:
+            st.caption("📊 Click 'Fetch All' to load whale positions from Hyperliquid")
+
+    with col_fetch:
+        fetch_clicked = st.button("🐋 Fetch All", key="fetch_whale_data", type="primary")
+
     with col_reload:
         if st.button("🔄 Reload", key="reload_whale_data"):
-            fetch_whale_positions_from_api.clear()
+            # Clear all cached data
+            if 'raw_positions' in st.session_state:
+                del st.session_state['raw_positions']
+            if 'wallet_positions_map' in st.session_state:
+                del st.session_state['wallet_positions_map']
+            cached_get_wallet_positions.clear()
             st.rerun()
 
-    with st.spinner("Loading whale positions from BigQuery..."):
-        raw_positions = fetch_whale_positions_from_api()
+    # Fetch data if button clicked
+    if fetch_clicked:
+        if not wallet_addresses:
+            st.error("No wallet addresses found in wallet_address.txt")
+            st.stop()
+
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+
+        def update_progress(current, total):
+            progress_bar.progress(current / total)
+            status_text.text(f"Fetching {current}/{total} wallets...")
+
+        with st.spinner("Fetching whale positions from Hyperliquid..."):
+            raw_positions = fetch_all_whale_positions(wallet_addresses, update_progress)
+
+        progress_bar.empty()
+        status_text.empty()
+
+        if raw_positions:
+            st.session_state['raw_positions'] = raw_positions
+            st.success(f"✅ Fetched {len(raw_positions)} positions from {len(set(p['wallet_address'] for p in raw_positions))} wallets")
+            st.rerun()
+        else:
+            st.warning("No positions found. Wallets may have no open positions.")
+
+    # Check if we have data
+    raw_positions = st.session_state.get('raw_positions', [])
 
     if not raw_positions:
-        st.error("Failed to load whale positions from API")
+        st.info("👆 Click 'Fetch All' to load whale positions from Hyperliquid API (free, real-time)")
         st.stop()
-
-    # Store raw_positions in session state for helper functions
-    st.session_state['raw_positions'] = raw_positions
 
     # Transform API data to expected format
     all_wallet_data = []
@@ -417,7 +530,7 @@ def render_smart_money_content():
                 'account_value': pos.get('account_value_usd') or 0,
                 'total_margin_used': pos.get('total_margin_used_usd') or 0,
                 'withdrawable': pos.get('withdrawable_usd') or 0,
-                'net_liquidation': pos.get('net_liquidation_position_usd') or 0,
+                'net_liquidation': pos.get('account_value_usd') or 0,
             }
         if pos.get('token_symbol'):  # Only add if has position
             wallet_positions_map[addr]['positions'].append(pos)
@@ -766,11 +879,14 @@ def render_smart_money_content():
 
         col_title, col_reload = st.columns([4, 1])
         with col_title:
-            st.caption("📦 Data from BigQuery (free) - Click token to expand")
+            st.caption("📦 Data from Hyperliquid (free) - Click token to expand")
         with col_reload:
             if st.button("🔄 Reload All", key="reload_all_tokens"):
-                # Clear BigQuery cache
-                fetch_whale_positions_from_api.clear()
+                # Clear cached data
+                if 'raw_positions' in st.session_state:
+                    del st.session_state['raw_positions']
+                if 'wallet_positions_map' in st.session_state:
+                    del st.session_state['wallet_positions_map']
                 st.rerun()
 
         # Get tokens from token_summary (sorted by UPNL), fallback to default list
@@ -781,7 +897,7 @@ def render_smart_money_content():
             tokens = ["BTC", "ETH", "SOL", "ARB", "DOGE", "AVAX", "LINK", "OP", "APT", "SUI"]
 
         for token in tokens:
-            # Get positions from BigQuery cache (no API call)
+            # Get positions from session cache
             positions = get_token_positions_from_cache(token)
 
             if positions:
@@ -816,8 +932,7 @@ def render_smart_money_content():
 
             with st.expander(title, expanded=False):
                 if not positions:
-                    # No positions for this token in BigQuery data
-                    st.info(f"No positions found for {token} in cached data")
+                    st.info(f"No positions found for {token}. Click 'Fetch All' to load data.")
                     continue
 
                 long_positions = [p for p in positions if p.get('side') == 'Long']
@@ -835,7 +950,7 @@ def render_smart_money_content():
                     bias = "Bullish" if ratio > 55 else "Bearish" if ratio < 45 else "Neutral"
                     st.metric("Long %", f"{ratio:.1f}%", bias)
                 with col4:
-                    st.metric("Status", "📦 BigQuery")
+                    st.metric("Status", "📦 Cached")
 
                 st.divider()
 
@@ -937,7 +1052,7 @@ def render_smart_money_content():
 
     # Footer
     st.markdown("---")
-    st.markdown("Data: [Nansen](https://nansen.ai) via BigQuery | 📦 **Free** (No API credits) | Built with Streamlit")
+    st.markdown("Data: [Hyperliquid](https://hyperliquid.xyz) API | 📦 **Free** (Real-time) | Built with Streamlit")
 
 
 # ==================== WHALE SCREENER (HYPERLIQUID) DASHBOARD ====================

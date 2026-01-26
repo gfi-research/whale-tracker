@@ -194,6 +194,74 @@ class HyperliquidClient:
             print(f"Error fetching open orders: {e}")
             return []
 
+    def get_clearinghouse_state(self, user_address: str) -> Optional[dict]:
+        """
+        Fetch user's clearinghouse state (positions and margin summary).
+
+        Args:
+            user_address: Ethereum address (0x...)
+
+        Returns:
+            Dict with assetPositions and marginSummary, or None if error
+        """
+        try:
+            response = self._make_request({"type": "clearinghouseState", "user": user_address})
+            return response if response else None
+        except Exception as e:
+            print(f"Error fetching clearinghouse state: {e}")
+            return None
+
+    def get_all_positions(self, user_address: str) -> dict:
+        """
+        Get formatted positions data for a user.
+
+        Returns dict with:
+        - account_value: Total account value in USD
+        - total_margin_used: Total margin used
+        - withdrawable: Withdrawable amount
+        - positions: List of position dicts
+        """
+        state = self.get_clearinghouse_state(user_address)
+        if not state:
+            return None
+
+        margin = state.get('marginSummary', {})
+        account_value = float(margin.get('accountValue', 0))
+        total_margin = float(margin.get('totalMarginUsed', 0))
+
+        positions = []
+        for asset_pos in state.get('assetPositions', []):
+            pos = asset_pos.get('position', {})
+            size = float(pos.get('szi', 0))
+
+            if size == 0:
+                continue  # Skip empty positions
+
+            leverage_info = pos.get('leverage', {})
+            leverage_value = leverage_info.get('value', 1) if isinstance(leverage_info, dict) else 1
+            leverage_type = leverage_info.get('type', 'cross') if isinstance(leverage_info, dict) else 'cross'
+
+            positions.append({
+                'token_symbol': pos.get('coin', 'Unknown'),
+                'position_side': 'Long' if size > 0 else 'Short',
+                'position_size': str(size),
+                'position_value_usd': float(pos.get('positionValue', 0)),
+                'unrealized_pnl_usd': float(pos.get('unrealizedPnl', 0)),
+                'entry_price_usd': float(pos.get('entryPx', 0)),
+                'liquidation_price_usd': float(pos.get('liquidationPx', 0)) if pos.get('liquidationPx') else None,
+                'leverage_value': leverage_value,
+                'leverage_type': leverage_type,
+                'return_on_equity': float(pos.get('returnOnEquity', 0)),
+                'margin_used_usd': float(pos.get('marginUsed', 0)),
+            })
+
+        return {
+            'account_value_usd': account_value,
+            'total_margin_used_usd': total_margin,
+            'withdrawable_usd': max(0, account_value - total_margin),
+            'positions': positions,
+        }
+
     def get_user_fills(self, user_address: str, limit: int = 2000) -> List[TradeFill]:
         """
         Fetch user's trade fills (trading history).
