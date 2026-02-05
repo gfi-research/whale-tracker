@@ -1,201 +1,181 @@
 trader_address_label,Entity,trader_address
-Smart HL Perps Trader,retail,0xb317d2bc2d3d2df5fa441b5bae0ab9d8b07283ae
-Abraxas Capital [0x5b5d51],VCs,0x5b5d51203a0f9079f8aeb098a6523a13f298c060
-Trading Bot [0x880ac4],retail,0x880ac484a1743862989a441d6d867238c7aa311c
-High Activity [0x880ac4],retail,0x880ac484a1743862989a441d6d867238c7aa311c
-Fasanara Capital: 0x7fd [0x7fdafd],VCs,0x621c5551678189b9a6c94d929924c225ff1d63ab
-Fasanara Capital: 0x7fd [0x7fdafd],VCs,0x7fdafde5cfb5465924316eced2d3715494c517d1
-Abraxas Capital [0xb83de0],retail,0xb83de012dba672c76a7dbbbf3e459cb59d7d6e36
-Galaxy Digital [0xcac196],VCs,0xcac19662ec88d23fa1c81ac0e8570b0cf2ff26b3
-Smart HL Perps Trader [0xa31211],retail,0xa312114b5795dff9b8db50474dd57701aa78ad1e
-Wintermute Market Making [0xecb63c],MM,0xecb63caa47c7c4e77f60f1ce858cf28dc2b82b00
-pension-usdt.eth [0x0ddf9b],retail,0x0ddf9bae2af4b874b96d287a5ad42eb47138a902
-High Activity [0x8e0969],retail,0x8e096995c3e4a3f0bc5b3ea1cba94de2aa4d70c9
-Smart HL Perps Trader [0x35d115],retail,0x35d1151ef1aab579cbb3109e69fa82f94ff5acb1
-Smart HL Perps Trader [0xfeec88],retail,0xfeec88b13fc0be31695069f02bac18538a154e9c
-Token Millionaire [0xd16924],retail,0xd1692402c26392ccc8588631d7d5ca9aed4348e5
-Resolv USR: Collateral [0x20c2d9],retail,0x20c2d95a3dfdca9e9ad12794d5fa6fad99da44f5
-Whale [0x856c35],retail,0x856c35038594767646266bc7fd68dc26480e910d
-"""yantngz"" on OpenSea [0xd7a678]",retail,0xd7a678fcf72c1b602850ef2f3e2d668ec41fa0ed
-Whale [0x94d373],retail,0x94d3735543ecb3d339064151118644501c933814
-frankfrankbank.eth [0x6f7d75],retail,0x6f7d75c18e8ca7f486eb4d2690abf7b329087062
-Top 100 on WBTC Leaderboard [0x8af700],retail,0x8af700ba841f30e0a3fcb0ee4c4a9d223e1efa05
-[0x09bc1c],retail,0x09bc1cf4d9f0b59e1425a8fde4d4b1f7d3c9410d
-Smart HL Perps Trader [0xea6670],retail,0xea6670ebdb4a388a8cfc16f6497bf4f267b061ee
-Whale [0x50b309],retail,0x50b309f78e774a756a2230e1769729094cac9f20
-bergspyder.eth [0x6859da],retail,0x6859da14835424957a1e6b397d8026b1d9ff7e1e
-High Balance [0xd487e2],retail,0xd487e26c62ed8c28ce3cc70b5791e501c2934982
-Top 100 on EZETH Leaderboard [0xa87a23],retail,0xa87a233e8a7d8951ff790a2e39738086cb5f71b7
-Token Millionaire [0x28cee4],retail,0x28cee4465f95720cb8464d56faea656751119040
-Trading Bot [0xffbd3e],retail,0xffbd3e51ae0e2c4407434e157965c064f2a11628
-High Balance [0xec326a],retail,0xec326a384ae965647d87e1f85db46d2efa15ae82
-[0x6979dd],retail,0x6979dde2781dc4ec843641b10b2a2f2e0f4bda62
-Former Smart Trader [0x208db9],retail,0x208db9f389989c5c387cc3a2620cc5251eace716
-High Balance [0xd96ea3],retail,0xd96ea3bcce83d4e1ef8abd1776eecd0cea1bb09e
-[0x7ca165],retail,0x7ca165f354e3260e2f8d5a7508cc9dd2fa009235
-Auros Global [0x023a3d],VCs,0x023a3d058020fb76cca98f01b3c48c8938a22355
-Smart HL Perps Trader [0xbe494a],retail,0xbe494a5e3a719a78a45a47ab453b7b0199b9d101
-High Activity [0x202513],retail,0x2025137a136bea7446deba681cbfc7cf1970840e
-Smart HL Perps Trader [0xe28236],retail,0xe2823659be02e0f48a4660e4da008b5e1abfdf29
-Bridge User [0x152717],retail,0x15271757b398cd1d3d7cca05c4f7b0c159afa7c2
-Smart HL Perps Trader [0xdca131],retail,0xdca131ba8f428bd2f90ae962e4cb2d226312505e
-Laurent Zeimes [0x8def9f],retail,0x8def9f50456c6c4e37fa5d3d57f108ed23992dae
-Former Smart Trader [0x13d92e],retail,0x13d92e015d4a8a99ab8490fef42fe83e754116e1
-donkstrategy.eth [0x649156],retail,0x649156ebf0a350deb18a1e4835873defd4dc5349
-Bridge User [0xc59498],retail,0xc59498175d6d317642aeb97f895a7ce1aa992191
-Smart HL Perps Trader [0x179c17],retail,0x179c17d04be626561b0355a248d6055a80456aa5
-High Activity [0x123dbc],retail,0x123dbca6a27005a3c4ce10cb66ee8ece8fc13bff
-Selini Capital [0x39475d],VCs,0x39475d17bcd20adc540e647dae6781b153fbf3b1
-Dex Trader [0xd47587],retail,0xd47587702a91731dc1089b5db0932cf820151a91
-Smart HL Perps Trader [0x570b09],retail,0x570b09e27a87f9acbce49f85056745d29b3ee3c6
-[0xd7b19f],retail,0xd7b19f8aaf5c9619bd5141945a73d2ca74984451
-Bridge User [0xd4c1f7],retail,0xd4c1f7e8d876c4749228d515473d36f919583d1d
-Former Smart Trader [0x2ba553],retail,0x2ba553d9f990a3b66b03b2dc0d030dfc1c061036
-[0xde4247],retail,0xde4247f0db1e4c32842049a1904bc733779f952b
-Consistent Perps Winner [0xd82f7d],retail,0xd82f7d84a524b8e82de0cb3df1f04e338604fd8e
-High Balance [0x84838a],retail,0x84838a8c45a9572846ec1c7a7f7fd8183fca9d3f
-Smart HL Perps Trader [0xfce053],retail,0xfce053a5e461683454bf37ad66d20344c0e3f4c0
-High Balance [0x2d99fe],retail,0x2d99fe0f36c1aebd28a1a2c0e82e8ca13c2ea351
-Yield Farmer [0x5f94a5],retail,0x5f94a51948d2376ad34a6fadfa2544e651b74b96
-Whale [0x514ad8],retail,0x514ad80730593801036e2934bcda9b4e90221b4d
-Medium Dex Trader [0xb798ae],retail,0xb798aef79972ce8f73d47b9ebbcda6bbb7ec4fbf
-High Balance [0x3bcae2],retail,0x3bcae23e8c380dab4732e9a159c0456f12d866f3
-Funded @beltoncap On Friendtech [0x56cd86],VCs,0x56cd86d6ef24a3f51ce6992b7f1db751b0a0276a
-Token Millionaire [0x960bb1],retail,0x960bb18454cd67b5a3edb4fa802b7c0b5b10e2ee
-[0x0fd468],retail,0x0fd468a73084daa6ea77a9261e40fdec3e67e0c7
-"""yehyun_eth"" on OpenSea [0x491150]",retail,0x4911505cbb6cc71f71b59ef1ec0ee99f6c57a8a0
-High Activity [0xae7a0f],retail,0xae7a0f9f663bb54bfe95378c7e3de7dd6e28d6bc
-Former Smart Trader [0x41206f],retail,0x41206f8efb51e5039e5b46e04e7866a4849f72d2
-Smart HL Perps Trader [0x45d26f],retail,0x45d26f28196d226497130c4bac709d808fed4029
-OpenSea User [0x86ccd7],retail,0x86ccd73e2de200ab3e15ee0bd5865f0b405f52b9
-Smart HL Perps Trader [0xe82bc6],retail,0xe82bc65677e46b6626a8e779ac263221db039c2d
-[0xbb475f],retail,0xbb475febf78b528f4f0d4ae1a12541406565199c
-[0x335f45],retail,0x335f45392f8d87745aaae68f5c192849afd9b60e
-Smart HL Perps Trader [0xbc433b],retail,0xbc433ba7c34752448c5361e5ed3038628a1753b0
-Smart HL Perps Trader [0x6bea81],retail,0x6bea81d7a0c5939a5ce5552e125ab57216cc597f
-Smart HL Perps Trader [0xb1694d],retail,0xb1694de2324433778487999bd86b1acb3335ebc4
-Consistent Perps Winner [0x936cf4],retail,0x936cf4fb95c30ce83f658b5bbb247e4bb381bb0f
-Manifold Trading [0x091144],retail,0x091144e651b334341eabdbbbfed644ad0100023e
-High Balance [0x31dea2],retail,0x31dea2516beee92135b96f464eeec3cf292a13f2
-Whale [0xaded86],retail,0xaded86bf6e6fd72f78dca132af112fa36230809e
-High Balance [0xccf135],retail,0xccf135ab352d561a15eb7be2a243cc4fcb7f0ab1
-Medium Dex Trader [0xfbc963],retail,0xfbc9638938262f15cc1b3a751a54d538559da361
-[0xbb9f03],retail,0xbb9f0315243db63fc34c51f96ad5bb7ce6e275e2
-[0xb632c6],retail,0xb632c6580173a16154f17cdafc6eb27e95cf73b7
-Consistent Perps Winner [0x016b88],retail,0x016b8816db87f0a0f8190e3f2ca88357809984a9
-Trading Bot [0x7717a7],retail,0x7717a7a245d9f950e586822b8c9b46863ed7bd7e
-Trading Bot [0x720a68],retail,0x720a68bf0813853cd3ed74d2fd0f54edfc7a43e1
-High Balance [0x6b44fb],retail,0x6b44fb3b080c233c6cb0b2d70f4b5694fd528572
-Smart HL Perps Trader [0xb33b01],retail,0xb33b01c9821a99d3d4ec14b1c9a2197524b9af97
-Former Smart Trader [0x2974e9],retail,0x2974e9fc90398407003d87daab9521355a821914
 [0x9deef0],retail,0x9deef087fbd279c29980754d7a2f63e66d4634c2
-[0x5559da],retail,0x5559da6ec434c5723d0ce9c4da7f29e3f8a3d43b
-Whale [0x162cc7],retail,0x162cc7c861ebd0c06b3d72319201150482518185
-[0xc16b8d],retail,0xc16b8ddcef47a74c9b76cd28e6834270090d72dd
-Smart HL Perps Trader [0xcd1c93],retail,0xcd1c932a413868c3c84e73e195bf34c1ba4ffec5
-[0x7eb902],retail,0x7eb9026d0183942458bd4660371c3cc0a2df3beb
-Smart HL Perps Trader [0xe2f86f],retail,0xe2f86feccb1207710a442bc4e27a0701a290275a
-Selini Capital [0x621c55],VCs,0x621c5551678189b9a6c94d929924c225ff1d63ab
-High Balance [0x5bc43f],retail,0x5bc43f38c2ddcd85857f218674cd384f172c3b0c
-High Balance [0x041836],retail,0x041836d6c0617c694b70b57680f45905811076db
-Top 100 on AVAX Leaderboard [0xf28e1b],retail,0xf28e1b06e00e8774c612e31ab3ac35d5a720085f
-High Activity [0xd6e1a6],retail,0xd6e1a6f7bb47aca69aaa511210227d40926ff256
-[0xdb79fe],retail,0xdb79fe310ea2972137d2a23658db0234902b517d
-High Activity [0x833b99],retail,0x833b99b27dac651d02080f5e220e929df891db06
-Former Smart Trader [0x92b585],retail,0x92b585bdf2d67c0fe321108b863ca4617dd39fe9
-Former Smart Trader [0x059049],retail,0x05904930cae1e9a48c055f4a8a83480ba7fc6abf
-Smart HL Perps Trader [0x6a7a17],retail,0x6a7a17046df7d3e746ce97d67dc1c6c55e27ce75
-Former Smart Trader [0x4d470e],retail,0x4d470e0a241c3d7321b4b6c6f23f214db85bfa47
-Former Smart Trader [0xa215ce],retail,0xa215ce4eac3900ac8a5e76f621eb8498be16aa51
-Whale [0x413c27],retail,0x413c2724b62975c18b1415650f998a8f0a67886c
-Trading Bot [0x7a6d5f],retail,0x7a6d5fc57f6906f337c48fe2763c3a501304f79c
-[0x779e5e],retail,0x779e5e469d5de3a13e563f736ffcf47ebe5584c5
-Selini Capital [0x34fb5e],VCs,0x34fb5ec7d4e939161946340ea2a1f29254b893de
-Smart HL Perps Trader [0x95e268],retail,0x95e2687b07f0dec34462fdab6bbebcc0b3ab49c6
-Whale [0x4a9603],retail,0x4a96036fb1529561fa3eeeb2781fad2d4f25500e
-[0x72cb91],retail,0x72cb918356c4f6d3f1b2e532928110ba6995f139
-High Activity [0x4b1c09],retail,0x4b1c09fa8322548360a76a3747e32a60a864bc38
-Nervous Degen: Funded @NateGoldstein On Friendtech [0xa4dedd],retail,0xa4dedda59f2908b92ae192cfd494839373bcb3c4
-Former Smart Trader [0x7a7da8],retail,0x7a7da855c61ba2326decf722691c6e2d14a50344
-phangjunyu.eth [0x2d23b7],retail,0x2d23b731e5f04996a2dfdbe434c7d922afdb5e00
-[0x0a06ec],retail,0x0a06ec6754b628be489b2c40bba20c8580392a7b
-[0xebcfa0],retail,0xebcfa0e05df4c406f4a166b1318581134a8537c0
-High Balance [0x0eba57],retail,0x0eba5721065f961bced568527bfa03ea9ed61a00
-Token Millionaire [0x5797f3],retail,0x5797f35b2a81669e85fa8f3ea8816f7054ad1dd4
-[0x3c363e],retail,0x3c363e96d22c056d748f199fb728fc80d70e461a
-[0xb8b26c],retail,0xb8b26c60dc88bc010a424404cf393c83b4a4b906
-[0x32051a],retail,0x32051a0c36af1449e0eee08146a808115ccc40bb
-[0xcd2106],retail,0xcd21065085e9bb2a9c8baa7cbd84a5da1e260601
-Selini Capital [0x95995f],VCs,0x95995f302ad58138d791ce49f9f3b1274e80c60a
-[0x3ff73e],retail,0x3ff73eae520b053e82449eda5c9cf719c38aa48c
-Former Smart Trader [0x093f2e],retail,0x093f2e026bf3d52f5ba02306976255782ffbf712
-High Balance [0xaed022],retail,0xaed022949be3988afef024762f1286f3294348af
-Whale [0x152e41],retail,0x152e41f0b83e6cad4b5dc730c1d6279b7d67c9dc
-Token Millionaire [0x8cc94d],retail,0x8cc94dc843e1ea7a19805e0cca43001123512b6a
-High Balance [0xd6ef56],retail,0xd6ef5649200101eb44ce8949f4cfb167b0c5a07a
-High Balance [0xdd0c5d],retail,0xdd0c5de50d72e5eaa96816e920e41ce89c4b8888
-High Activity [0xf58b67],retail,0xf58b673c1633ccef0ac58263cdc95ed80f817fc7
-[0x6a572b],retail,0x6a572bb9d31ff710f882f33c21d8ba11a169a887
-Yield Farmer [0x888e00],retail,0x888e000c78b8f1aada5b3c99f880794907b76d77
-Consistent Perps Winner [0x40f20b],retail,0x40f20b734d7d25ba0b6219e921382fa992a56a9e
-High Activity [0x404ca2],retail,0x404ca2035b37bf2e83505134ebcf8d03babb5f03
-Smart HL Perps Trader [0x106943],retail,0x106943709714fb0e5e62b82f5013ebc762591ae1
-[0x4cb5f4],retail,0x4cb5f4d145cd16460932bbb9b871bb6fd5db97e3
-High Activity [0xe11331],retail,0xe113311f35a53b196c0ab3ed31ad0bf937cc5c07
-Whale [0xef5fdc],retail,0xef5fdcefdb38803a654ee9f3539bed8058443d99
-High Activity [0xe86b05],retail,0xe86b057f5eb764c9738d6b0d38170befd0723664
-DeFi Manager [0xbf732e],retail,0xbf732ea04197942783e34730ed6e0f6099575d58
-High Activity [0x3fc56e],retail,0x3fc56e944aa7b1594c85861b2d46a07f82a2c0c1
-Smart HL Perps Trader [0x8bae35],retail,0x8bae3527e5a33fa0cf184f37bc112d071463ab6d
-Smart HL Perps Trader,retail,0x9eec98d048d06d9cd75318fffa3f3960e081daab
-Smart HL Perps Trader,retail,0x091159a8106b077c13e89bc09701117e8b5f129a
-ETH Millionaire,retail,0xa5b0edf6b55128e0ddae8e51ac538c3188401d41
-Wanye kest,retail,0x8607a7d180de23645db594d90621d837749408d5
-Former Smart Trader,retail,0x1e37a337ed460039d1b15bd3bc489de789768d5e
-High Balance,retail,0x5b9306593ae710a66832c4101e019e3e96f65d0a
-Smart HL Perps Trader,retail,0x5d2f4460ac3514ada79f5d9838916e508ab39bb7
-Whale,retail,0x469e9a7f624b04c24f0e64edf8d8a277e6bf58a5
-Former Smart Trader,retail,0xbe19541903f64af97bcf8436f4d15bf3a56b8bd1
-Whale,retail,0xd83516572789f1c782c8298efce58a5600318fd7
-Smart HL Perps Trader,retail,0x06cecfbac34101ae41c88ebc2450f8602b3d164b
-Smart HL Perps Trader,retail,0xefffa330cbae8d916ad1d33f0eeb16cfa711fa91
-Smart HL Perps Trader,retail,0xe02e420ec55b4e03924d77c7b342c012541ba2d3
-Former Smart Trader,retail,0x939f95036d2e7b6d7419ec072bf9d967352204d2
-58bro.eth,retail,0x418aa6bf98a2b2bc93779f810330d88cde488888
-Smart HL Perps Trader,retail,0x015354106478dda69c4aae3c0cf801290b738052
-Token Millionaire,retail,0xc6877a65349b0fa45cc61a267ee682c7abf2b369
-Smart HL Perps Trader,retail,0xc7290b4b308431a985fa9e3e8a335c2f7650517c
-Token Millionaire,retail,0x872ea3fe1a064a4f739fa897ec3f81404b352092
-whale,retail,0x67fcc46ed2a63971697dad2fc7bb0091fe89e51d
-Former Smart Trader,retail,0xd260b2216b735277da6771564a01c04856e78321
-Smart HL Perps Trader,retail,0x4eebd8d39e82efb958e0fa9f694435c910c8518f
-High Balance,retail,0x8bcf7a888c66f635ac4a2caf42a8dd12a3b20b14
-Consistent Perps Winner,retail,0xab5e6f394951c28ab1873007e373202689cdbec3
-Former Smart Trader,retail,0xbadbb1de95b5f333623ebece7026932fa5039ee6
-Former Smart Trader,retail,0x1d74a7760df9d563d0b6610b1705266c4e2fdb26
-Former Smart Trader,retail,0x15b325660a1c4a9582a7d834c31119c0cb9e3a42
-Whale,retail,0x0748e296e5a350ec36c8487a1cea406e1b57d4b2
-Smart HL Perps Trader,retail,0xd2b2a8ab7a8c903501f4db4ee45c67522a4511ed
-Token Millionaire,retail,0xaea8e3bd369217cc6e3e6abddf0da318fba8e59b
-High Activity,retail,0x14209452e1d82dd0adf703454c1d1d907f142830
-High Activity,retail,0xc1471df385b1b039aae2000678e0b8bd905b3aef
-Former Smart Trader,retail,0xbfc79c444c41a74516bf31237ebf586a231480b4
-Consistent Perps Winner,retail,0xf5a523b171032c060d49c39fbf2e9bec473e1286
-Smart HL Perps Trader,retail,0x84abc08c0ea62e687c370154de1f38ea462f4d37
-High Balance,retail,0x28233e5edddfc9f71f0cecf58ca98f6a2ca11f43
-Smart HL Perps Trader,retail,0x8eadef1db48d9a682da64d74a69c5ac78d0ee175
-High Balance,retail,0x47f5a6397b79deaaca5c456503e7c1a49357b942
-High Balance,retail,0x44c9c226cdfae773002b3f86d3966af3cd8f277c
-@brisket131,retail,0x9cbf099ff424979439dfba03f00b5961784c06ce
 da-si...a.eth,retail,0x0cacfc8c96b84bc5698fcdcb5ffd536b4a246170
-"""ghostofsonora"" on OpenSea",retail,0x69906b0ed626ca01a4b7c001e5711e5714ccf207
-High Balance,retail,0x7625dc67deab1864570ad816f59a9b867f280e49
+Former Smart Trader [0x2ba553],retail,0x2ba553d9f990a3b66b03b2dc0d030dfc1c061036
+Resolv USR: Collateral [0x20c2d9],retail,0x20c2d95a3dfdca9e9ad12794d5fa6fad99da44f5
+High Balance [0xdd0c5d],retail,0xdd0c5de50d72e5eaa96816e920e41ce89c4b8888
+Smart HL Perps Trader [0xbe494a],retail,0xbe494a5e3a719a78a45a47ab453b7b0199b9d101
+Yield Farmer [0x5f94a5],retail,0x5f94a51948d2376ad34a6fadfa2544e651b74b96
+High Balance [0x6b44fb],retail,0x6b44fb3b080c233c6cb0b2d70f4b5694fd528572
+Whale [0xaded86],retail,0xaded86bf6e6fd72f78dca132af112fa36230809e
+DeFi Manager [0xbf732e],retail,0xbf732ea04197942783e34730ed6e0f6099575d58
+High Activity [0xf58b67],retail,0xf58b673c1633ccef0ac58263cdc95ed80f817fc7
+Whale [0x413c27],retail,0x413c2724b62975c18b1415650f998a8f0a67886c
+Former Smart Trader [0xa215ce],retail,0xa215ce4eac3900ac8a5e76f621eb8498be16aa51
+Former Smart Trader [0x2974e9],retail,0x2974e9fc90398407003d87daab9521355a821914
+High Balance [0xccf135],retail,0xccf135ab352d561a15eb7be2a243cc4fcb7f0ab1
+Former Smart Trader [0x7a7da8],retail,0x7a7da855c61ba2326decf722691c6e2d14a50344
+OpenSea User [0x86ccd7],retail,0x86ccd73e2de200ab3e15ee0bd5865f0b405f52b9
+High Activity,retail,0xc1471df385b1b039aae2000678e0b8bd905b3aef
+High Balance,retail,0x8bcf7a888c66f635ac4a2caf42a8dd12a3b20b14
+Former Smart Trader,retail,0xbadbb1de95b5f333623ebece7026932fa5039ee6
+Token Millionaire [0x8cc94d],retail,0x8cc94dc843e1ea7a19805e0cca43001123512b6a
+Former Smart Trader,retail,0x15b325660a1c4a9582a7d834c31119c0cb9e3a42
+Smart HL Perps Trader [0xb33b01],retail,0xb33b01c9821a99d3d4ec14b1c9a2197524b9af97
+Funded @beltoncap On Friendtech [0x56cd86],VCs,0x56cd86d6ef24a3f51ce6992b7f1db751b0a0276a
+High Balance,retail,0x5b9306593ae710a66832c4101e019e3e96f65d0a
+Former Smart Trader,retail,0xbe19541903f64af97bcf8436f4d15bf3a56b8bd1
+Smart HL Perps Trader [0xe82bc6],retail,0xe82bc65677e46b6626a8e779ac263221db039c2d
+Former Smart Trader [0x13d92e],retail,0x13d92e015d4a8a99ab8490fef42fe83e754116e1
+Token Millionaire,retail,0xc6877a65349b0fa45cc61a267ee682c7abf2b369
+[0x779e5e],retail,0x779e5e469d5de3a13e563f736ffcf47ebe5584c5
+High Balance [0xd487e2],retail,0xd487e26c62ed8c28ce3cc70b5791e501c2934982
+Whale,retail,0x0748e296e5a350ec36c8487a1cea406e1b57d4b2
+High Balance [0xd96ea3],retail,0xd96ea3bcce83d4e1ef8abd1776eecd0cea1bb09e
+Whale [0x152e41],retail,0x152e41f0b83e6cad4b5dc730c1d6279b7d67c9dc
+Trading Bot [0x720a68],retail,0x720a68bf0813853cd3ed74d2fd0f54edfc7a43e1
+High Activity [0x123dbc],retail,0x123dbca6a27005a3c4ce10cb66ee8ece8fc13bff
+Medium Dex Trader [0xfbc963],retail,0xfbc9638938262f15cc1b3a751a54d538559da361
+Whale [0x94d373],retail,0x94d3735543ecb3d339064151118644501c933814
+Yield Farmer [0x888e00],retail,0x888e000c78b8f1aada5b3c99f880794907b76d77
+Whale [0x856c35],retail,0x856c35038594767646266bc7fd68dc26480e910d
+High Balance [0x5bc43f],retail,0x5bc43f38c2ddcd85857f218674cd384f172c3b0c
+Token Millionaire [0x960bb1],retail,0x960bb18454cd67b5a3edb4fa802b7c0b5b10e2ee
+bergspyder.eth [0x6859da],retail,0x6859da14835424957a1e6b397d8026b1d9ff7e1e
+Trading Bot [0xffbd3e],retail,0xffbd3e51ae0e2c4407434e157965c064f2a11628
+Manifold Trading [0x091144],retail,0x091144e651b334341eabdbbbfed644ad0100023e
+phangjunyu.eth [0x2d23b7],retail,0x2d23b731e5f04996a2dfdbe434c7d922afdb5e00
+Smart HL Perps Trader,retail,0x5d2f4460ac3514ada79f5d9838916e508ab39bb7
+Abraxas Capital [0xb83de0],VCs,0xb83de012dba672c76a7dbbbf3e459cb59d7d6e36
+Trading Bot [0x7717a7],retail,0x7717a7a245d9f950e586822b8c9b46863ed7bd7e
+Token Millionaire [0x5797f3],retail,0x5797f35b2a81669e85fa8f3ea8816f7054ad1dd4
+High Activity [0x3fc56e],retail,0x3fc56e944aa7b1594c85861b2d46a07f82a2c0c1
 Token Millionaire,retail,0xcac1f1c3e4599e044dc2a9d38a9b6ef1af1bdae8
-DOPEX Vault Depositor,retail,0xaf0fdd39e5d92499b0ed9f68693da99c0ec1e92e
-High Activity,retail,0xb0fbfefc6c325964d0ffc3f909bdda80b8421326
-Former Smart Trader,retail,0xc7f94fb3b3ba614b9b2bf80697ab5a31917005a2
-Former Smart Trader,retail,0xc6aa7b1f1dbe24ca2f12c193b60eb05230270e75
-Former Smart Trader,retail,0xbaaaf6571ab7d571043ff1e313a9609a10637864
+@brisket131,retail,0x9cbf099ff424979439dfba03f00b5961784c06ce
+Smart HL Perps Trader [0xe28236],retail,0xe2823659be02e0f48a4660e4da008b5e1abfdf29
+High Activity [0x4b1c09],retail,0x4b1c09fa8322548360a76a3747e32a60a864bc38
+Smart HL Perps Trader [0x35d115],retail,0x35d1151ef1aab579cbb3109e69fa82f94ff5acb1
+[0xcd2106],retail,0xcd21065085e9bb2a9c8baa7cbd84a5da1e260601
+Whale [0x162cc7],retail,0x162cc7c861ebd0c06b3d72319201150482518185
+donkstrategy.eth [0x649156],retail,0x649156ebf0a350deb18a1e4835873defd4dc5349
+Galaxy Digital [0xcac196],VCs,0xcac19662ec88d23fa1c81ac0e8570b0cf2ff26b3
+Whale [0xef5fdc],retail,0xef5fdcefdb38803a654ee9f3539bed8058443d99
+[0x72cb91],retail,0x72cb918356c4f6d3f1b2e532928110ba6995f139
+High Balance [0x84838a],retail,0x84838a8c45a9572846ec1c7a7f7fd8183fca9d3f
+Smart HL Perps Trader,retail,0xe02e420ec55b4e03924d77c7b342c012541ba2d3
 High Activity,retail,0x32a501193fe8789b2093e03e698e5ca979c9cd92
+whale,retail,0x67fcc46ed2a63971697dad2fc7bb0091fe89e51d
+Top 100 on EZETH Leaderboard [0xa87a23],retail,0xa87a233e8a7d8951ff790a2e39738086cb5f71b7
+High Balance,retail,0x28233e5edddfc9f71f0cecf58ca98f6a2ca11f43
+Selini Capital [0x95995f],VCs,0x95995f302ad58138d791ce49f9f3b1274e80c60a
+Smart HL Perps Trader [0x8bae35],retail,0x8bae3527e5a33fa0cf184f37bc112d071463ab6d
+Smart HL Perps Trader,retail,0x015354106478dda69c4aae3c0cf801290b738052
+Whale [0x4a9603],retail,0x4a96036fb1529561fa3eeeb2781fad2d4f25500e
+Dex Trader [0xd47587],retail,0xd47587702a91731dc1089b5db0932cf820151a91
+Token Millionaire,retail,0xaea8e3bd369217cc6e3e6abddf0da318fba8e59b
+High Activity [0xd6e1a6],retail,0xd6e1a6f7bb47aca69aaa511210227d40926ff256
+[0x0a06ec],retail,0x0a06ec6754b628be489b2c40bba20c8580392a7b
+Fasanara Capital: 0x7fd [0x7fdafd],VCs,0x621c5551678189b9a6c94d929924c225ff1d63ab
+Top 100 on WBTC Leaderboard [0x8af700],retail,0x8af700ba841f30e0a3fcb0ee4c4a9d223e1efa05
+Smart HL Perps Trader [0x45d26f],retail,0x45d26f28196d226497130c4bac709d808fed4029
+Selini Capital [0x34fb5e],VCs,0x34fb5ec7d4e939161946340ea2a1f29254b893de
+Abraxas Capital [0x5b5d51],VCs,0x5b5d51203a0f9079f8aeb098a6523a13f298c060
+High Activity [0x202513],retail,0x2025137a136bea7446deba681cbfc7cf1970840e
+High Balance [0x31dea2],retail,0x31dea2516beee92135b96f464eeec3cf292a13f2
+[0xdb79fe],retail,0xdb79fe310ea2972137d2a23658db0234902b517d
+Former Smart Trader [0x208db9],retail,0x208db9f389989c5c387cc3a2620cc5251eace716
+[0x5559da],retail,0x5559da6ec434c5723d0ce9c4da7f29e3f8a3d43b
+[0x32051a],retail,0x32051a0c36af1449e0eee08146a808115ccc40bb
+Former Smart Trader,retail,0xc6aa7b1f1dbe24ca2f12c193b60eb05230270e75
+High Balance,retail,0x47f5a6397b79deaaca5c456503e7c1a49357b942
+Auros Global [0x023a3d],VCs,0x023a3d058020fb76cca98f01b3c48c8938a22355
+DOPEX Vault Depositor,retail,0xaf0fdd39e5d92499b0ed9f68693da99c0ec1e92e
+[0x0fd468],retail,0x0fd468a73084daa6ea77a9261e40fdec3e67e0c7
+Former Smart Trader,retail,0xbfc79c444c41a74516bf31237ebf586a231480b4
+Smart HL Perps Trader [0xbc433b],retail,0xbc433ba7c34752448c5361e5ed3038628a1753b0
+Consistent Perps Winner [0x016b88],retail,0x016b8816db87f0a0f8190e3f2ca88357809984a9
+Trading Bot [0x7a6d5f],retail,0x7a6d5fc57f6906f337c48fe2763c3a501304f79c
+[0x09bc1c],retail,0x09bc1cf4d9f0b59e1425a8fde4d4b1f7d3c9410d
+[0x7ca165],retail,0x7ca165f354e3260e2f8d5a7508cc9dd2fa009235
+Former Smart Trader [0x059049],retail,0x05904930cae1e9a48c055f4a8a83480ba7fc6abf
+[0xebcfa0],retail,0xebcfa0e05df4c406f4a166b1318581134a8537c0
+High Activity [0xe86b05],retail,0xe86b057f5eb764c9738d6b0d38170befd0723664
+Former Smart Trader,retail,0xc7f94fb3b3ba614b9b2bf80697ab5a31917005a2
+Selini Capital [0x39475d],VCs,0x39475d17bcd20adc540e647dae6781b153fbf3b1
+High Activity,retail,0xb0fbfefc6c325964d0ffc3f909bdda80b8421326
+High Activity [0x833b99],retail,0x833b99b27dac651d02080f5e220e929df891db06
+Wintermute Market Making [0xecb63c],MM,0xecb63caa47c7c4e77f60f1ce858cf28dc2b82b00
+[0x4cb5f4],retail,0x4cb5f4d145cd16460932bbb9b871bb6fd5db97e3
+Bridge User [0xc59498],retail,0xc59498175d6d317642aeb97f895a7ce1aa992191
+High Balance [0x3bcae2],retail,0x3bcae23e8c380dab4732e9a159c0456f12d866f3
 Smart HL Perps Trader,retail,0x4cc390eada38741fe9c77036b7c38537fb5f38ea
 Trading Bot,retail,0x987163b6b482c30c2f5f3aa2760109668eb0091d
+"ghostofsonora" on OpenSea,retail,0x69906b0ed626ca01a4b7c001e5711e5714ccf207
+High Activity [0x8e0969],retail,0x8e096995c3e4a3f0bc5b3ea1cba94de2aa4d70c9
+Smart HL Perps Trader [0xa31211],retail,0xa312114b5795dff9b8db50474dd57701aa78ad1e
+High Activity [0xae7a0f],retail,0xae7a0f9f663bb54bfe95378c7e3de7dd6e28d6bc
+Smart HL Perps Trader,retail,0x9eec98d048d06d9cd75318fffa3f3960e081daab
+High Balance [0xd6ef56],retail,0xd6ef5649200101eb44ce8949f4cfb167b0c5a07a
+[0xbb475f],retail,0xbb475febf78b528f4f0d4ae1a12541406565199c
+High Balance [0x041836],retail,0x041836d6c0617c694b70b57680f45905811076db
+Top 100 on AVAX Leaderboard [0xf28e1b],retail,0xf28e1b06e00e8774c612e31ab3ac35d5a720085f
+[0x335f45],retail,0x335f45392f8d87745aaae68f5c192849afd9b60e
+Bridge User [0xd4c1f7],retail,0xd4c1f7e8d876c4749228d515473d36f919583d1d
+Former Smart Trader,retail,0x939f95036d2e7b6d7419ec072bf9d967352204d2
+Consistent Perps Winner,retail,0xab5e6f394951c28ab1873007e373202689cdbec3
+Bridge User [0x152717],retail,0x15271757b398cd1d3d7cca05c4f7b0c159afa7c2
+[0xb632c6],retail,0xb632c6580173a16154f17cdafc6eb27e95cf73b7
+Consistent Perps Winner [0x40f20b],retail,0x40f20b734d7d25ba0b6219e921382fa992a56a9e
+Whale,retail,0x469e9a7f624b04c24f0e64edf8d8a277e6bf58a5
+High Balance,retail,0x7625dc67deab1864570ad816f59a9b867f280e49
+Smart HL Perps Trader [0xdca131],retail,0xdca131ba8f428bd2f90ae962e4cb2d226312505e
+Smart HL Perps Trader [0x570b09],retail,0x570b09e27a87f9acbce49f85056745d29b3ee3c6
+Former Smart Trader,retail,0x1e37a337ed460039d1b15bd3bc489de789768d5e
+High Activity [0x404ca2],retail,0x404ca2035b37bf2e83505134ebcf8d03babb5f03
+Laurent Zeimes [0x8def9f],retail,0x8def9f50456c6c4e37fa5d3d57f108ed23992dae
+High Activity,retail,0x14209452e1d82dd0adf703454c1d1d907f142830
+Smart HL Perps Trader [0xfce053],retail,0xfce053a5e461683454bf37ad66d20344c0e3f4c0
+Consistent Perps Winner,retail,0xf5a523b171032c060d49c39fbf2e9bec473e1286
+High Balance [0x2d99fe],retail,0x2d99fe0f36c1aebd28a1a2c0e82e8ca13c2ea351
+Former Smart Trader [0x92b585],retail,0x92b585bdf2d67c0fe321108b863ca4617dd39fe9
+pension-usdt.eth [0x0ddf9b],retail,0x0ddf9bae2af4b874b96d287a5ad42eb47138a902
+Former Smart Trader,retail,0xd260b2216b735277da6771564a01c04856e78321
+Smart HL Perps Trader,retail,0x06cecfbac34101ae41c88ebc2450f8602b3d164b
+Smart HL Perps Trader,retail,0xd2b2a8ab7a8c903501f4db4ee45c67522a4511ed
+Smart HL Perps Trader [0xfeec88],retail,0xfeec88b13fc0be31695069f02bac18538a154e9c
+Former Smart Trader [0x41206f],retail,0x41206f8efb51e5039e5b46e04e7866a4849f72d2
+High Balance,retail,0x44c9c226cdfae773002b3f86d3966af3cd8f277c
+[0x3c363e],retail,0x3c363e96d22c056d748f199fb728fc80d70e461a
+Former Smart Trader,retail,0xbaaaf6571ab7d571043ff1e313a9609a10637864
+58bro.eth,retail,0x418aa6bf98a2b2bc93779f810330d88cde488888
+Former Smart Trader,retail,0x1d74a7760df9d563d0b6610b1705266c4e2fdb26
+Consistent Perps Winner [0xd82f7d],retail,0xd82f7d84a524b8e82de0cb3df1f04e338604fd8e
+High Balance [0x0eba57],retail,0x0eba5721065f961bced568527bfa03ea9ed61a00
+[0x6979dd],retail,0x6979dde2781dc4ec843641b10b2a2f2e0f4bda62
+Smart HL Perps Trader [0xb1694d],retail,0xb1694de2324433778487999bd86b1acb3335ebc4
+Smart HL Perps Trader,retail,0x091159a8106b077c13e89bc09701117e8b5f129a
+Smart HL Perps Trader [0x6bea81],retail,0x6bea81d7a0c5939a5ce5552e125ab57216cc597f
+Smart HL Perps Trader [0x6a7a17],retail,0x6a7a17046df7d3e746ce97d67dc1c6c55e27ce75
+Smart HL Perps Trader,retail,0x84abc08c0ea62e687c370154de1f38ea462f4d37
+[0xbb9f03],retail,0xbb9f0315243db63fc34c51f96ad5bb7ce6e275e2
+Smart HL Perps Trader [0x106943],retail,0x106943709714fb0e5e62b82f5013ebc762591ae1
+Smart HL Perps Trader,retail,0xefffa330cbae8d916ad1d33f0eeb16cfa711fa91
+Wanye kest,retail,0x8607a7d180de23645db594d90621d837749408d5
+ETH Millionaire,retail,0xa5b0edf6b55128e0ddae8e51ac538c3188401d41
+Token Millionaire [0xd16924],retail,0xd1692402c26392ccc8588631d7d5ca9aed4348e5
+Smart HL Perps Trader [0xe2f86f],retail,0xe2f86feccb1207710a442bc4e27a0701a290275a
+Smart HL Perps Trader [0x179c17],retail,0x179c17d04be626561b0355a248d6055a80456aa5
+Smart HL Perps Trader,retail,0x4eebd8d39e82efb958e0fa9f694435c910c8518f
+Fasanara Capital: 0x7fd [0x7fdafd],VCs,0x7fdafde5cfb5465924316eced2d3715494c517d1
+[0xc16b8d],retail,0xc16b8ddcef47a74c9b76cd28e6834270090d72dd
+[0x3ff73e],retail,0x3ff73eae520b053e82449eda5c9cf719c38aa48c
+frankfrankbank.eth [0x6f7d75],retail,0x6f7d75c18e8ca7f486eb4d2690abf7b329087062
+[0x7eb902],retail,0x7eb9026d0183942458bd4660371c3cc0a2df3beb
+Medium Dex Trader [0xb798ae],retail,0xb798aef79972ce8f73d47b9ebbcda6bbb7ec4fbf
+Smart HL Perps Trader,retail,0xc7290b4b308431a985fa9e3e8a335c2f7650517c
+Smart HL Perps Trader [0xea6670],retail,0xea6670ebdb4a388a8cfc16f6497bf4f267b061ee
+Consistent Perps Winner [0x936cf4],retail,0x936cf4fb95c30ce83f658b5bbb247e4bb381bb0f
+High Activity [0xe11331],retail,0xe113311f35a53b196c0ab3ed31ad0bf937cc5c07
+Token Millionaire,retail,0x872ea3fe1a064a4f739fa897ec3f81404b352092
+[0xd7b19f],retail,0xd7b19f8aaf5c9619bd5141945a73d2ca74984451
+Smart HL Perps Trader,retail,0x8eadef1db48d9a682da64d74a69c5ac78d0ee175
